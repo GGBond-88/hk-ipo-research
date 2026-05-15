@@ -29,24 +29,50 @@ _SECTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Markdown 标题行（# / ## / ### …）
+# Markdown 标题行（# / ## / ### …）或加粗标题行（** … **）
 _MD_HEADING_RE = re.compile(r"^(#{1,4})\s+(.+)", re.MULTILINE)
+# pymupdf4llm 有时把章节标题输出为加粗段落而非 # 标题，单独捕获
+_MD_BOLD_RE = re.compile(r"^\*\*(.+?)\*\*\s*$", re.MULTILINE)
 
 
-# ── TOC 定位 ──────────────────────────────────────────────────────────────────
+def _matches_section_title(title: str) -> bool:
+    """判断字符串是否是 Use of Proceeds 章节标题（大小写不敏感）。
 
-def _locate_via_toc(doc: pymupdf.Document) -> tuple[str, int, int] | None:
-    """从 PDF 书签中找到目标章节的起止页（1-based）。
-
-    返回 (section_title, start_page_1based, end_page_1based)，找不到返回 None。
+    匹配：
+      "USE OF PROCEEDS" / "Use of Proceeds" / "use of proceeds"
+      "FUTURE PLANS AND USE OF PROCEEDS"（及其大小写变体）
+    不匹配：
+      "Use of Proceeds Summary"（子章节干扰项，含 Summary 后缀）
+      "Application of Proceeds"（近义但措辞不同）
+      空字符串
     """
-    toc = doc.get_toc()  # [[level, title, page_1based], ...]
+    if not title or not title.strip():
+        return False
+    # 必须整体匹配：标题内容与正则完全对应，不能只是包含一个子串
+    # 用 fullmatch 而非 search，防止 "Use of Proceeds Summary" 误匹配
+    return bool(re.fullmatch(
+        r"(?:future\s+plans?\s+and\s+)?use\s+of\s+proceeds",
+        title.strip(),
+        re.IGNORECASE,
+    ))
+
+
+# ── TOC 纯逻辑 ────────────────────────────────────────────────────────────────
+
+def _locate_in_toc_list(
+    toc: list[list], page_count: int
+) -> tuple[str, int, int] | None:
+    """从 TOC 列表中定位目标章节的起止页（1-based）。
+
+    参数格式与 PyMuPDF get_toc() 一致：[[level, title, page_1based], ...]
+    返回 (section_title, start_page, end_page)，找不到返回 None。
+    """
     if not toc:
         return None
 
     target_idx: int | None = None
-    for i, (lvl, title, page) in enumerate(toc):
-        if _SECTION_RE.search(title):
+    for i, (_, title, _page) in enumerate(toc):
+        if _matches_section_title(title):
             target_idx = i
             break
 
@@ -55,8 +81,7 @@ def _locate_via_toc(doc: pymupdf.Document) -> tuple[str, int, int] | None:
 
     target_lvl, target_title, start_page = toc[target_idx]
 
-    # 找同级或更高级的下一章节作为结束边界
-    end_page = doc.page_count  # 默认到文档末尾
+    end_page = page_count  # 默认到文档末尾
     for lvl, _, page in toc[target_idx + 1 :]:
         if lvl <= target_lvl:
             end_page = page - 1
@@ -65,43 +90,71 @@ def _locate_via_toc(doc: pymupdf.Document) -> tuple[str, int, int] | None:
     return target_title, start_page, end_page
 
 
-# ── 正则回退定位 ──────────────────────────────────────────────────────────────
+# ── TOC 定位（PDF 包装层） ─────────────────────────────────────────────────────
 
-def _locate_via_regex(doc: pymupdf.Document) -> tuple[str, int, int] | None:
-    """把全文转 Markdown，用正则找章节标题行，估算起止页（1-based）。"""
-    md_full = pymupdf4llm.to_markdown(doc)
-    headings = list(_MD_HEADING_RE.finditer(md_full))
+def _locate_via_toc(doc: pymupdf.Document) -> tuple[str, int, int] | None:
+    """从 PDF 书签中找到目标章节的起止页（1-based）。"""
+    return _locate_in_toc_list(doc.get_toc(), doc.page_count)
+
+
+# ── Regex 纯逻辑 ──────────────────────────────────────────────────────────────
+
+def _locate_in_markdown(
+    md_text: str, total_pages: int
+) -> tuple[str, int, int] | None:
+    """在 Markdown 全文中定位目标章节，估算起止页（1-based）。
+
+    同时识别两种标题格式：
+      - Markdown 标题：## FUTURE PLANS AND USE OF PROCEEDS
+      - 加粗段落：**FUTURE PLANS AND USE OF PROCEEDS**
+    返回 (section_title, start_page, end_page)，找不到返回 None。
+    """
+    # 收集所有标题候选：(char_pos, level, title_text)
+    # level: # 标题用 1-4，加粗段落用 level=1（视为顶级）
+    candidates: list[tuple[int, int, str]] = []
+    for m in _MD_HEADING_RE.finditer(md_text):
+        candidates.append((m.start(), len(m.group(1)), m.group(2).strip()))
+    for m in _MD_BOLD_RE.finditer(md_text):
+        # 加粗标题只在没有被 # 标题覆盖时补充（避免重复）
+        pos = m.start()
+        if not any(abs(c[0] - pos) < 5 for c in candidates):
+            candidates.append((pos, 1, m.group(1).strip()))
+    candidates.sort(key=lambda x: x[0])
 
     target_idx: int | None = None
-    for i, m in enumerate(headings):
-        if _SECTION_RE.search(m.group(2)):
+    for i, (_pos, _lvl, title) in enumerate(candidates):
+        if _matches_section_title(title):
             target_idx = i
             break
 
     if target_idx is None:
         return None
 
-    target_m = headings[target_idx]
-    target_level = len(target_m.group(1))  # '#' 数量即层级
-    section_title = target_m.group(2).strip()
-
-    # 文本位置 → 估算页码（按字符偏移比例）
-    total_chars = len(md_full)
-    total_pages = doc.page_count
+    target_pos, target_level, section_title = candidates[target_idx]
+    total_chars = len(md_text)
 
     def char_to_page(pos: int) -> int:
+        if total_chars == 0:
+            return 1
         return max(1, round(pos / total_chars * total_pages))
 
-    start_page = char_to_page(target_m.start())
+    start_page = char_to_page(target_pos)
 
-    # 找下一个同级或更高标题
     end_page = total_pages
-    for m in headings[target_idx + 1 :]:
-        if len(m.group(1)) <= target_level:
-            end_page = char_to_page(m.start()) - 1
+    for pos, lvl, _ in candidates[target_idx + 1 :]:
+        if lvl <= target_level:
+            end_page = max(start_page, char_to_page(pos) - 1)
             break
 
-    return section_title, max(1, start_page), max(start_page, end_page)
+    return section_title, start_page, end_page
+
+
+# ── 正则回退定位（PDF 包装层） ────────────────────────────────────────────────
+
+def _locate_via_regex(doc: pymupdf.Document) -> tuple[str, int, int] | None:
+    """把全文转 Markdown，用正则找章节标题行，估算起止页（1-based）。"""
+    md_full = pymupdf4llm.to_markdown(doc)
+    return _locate_in_markdown(md_full, doc.page_count)
 
 
 # ── 文本提取 ──────────────────────────────────────────────────────────────────
