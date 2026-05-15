@@ -1,0 +1,25 @@
+# Secrets
+.env
+
+# Raw data (large files, not tracked)
+data/raw_pdfs/
+data/sections/
+data/extracted/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tools
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
