@@ -25,23 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hk_ipo import config
+from hk_ipo.schema import CATEGORY_L2
 
+# ── Allowed category vocabulary (imported from schema — single source of truth)
 
-# ── Allowed category vocabulary (mirrors L2 prompt) ──────────────────────────
-
-_CATEGORY_VOCAB: frozenset[str] = frozenset(
-    {
-        "R&D and technology",
-        "Product development",
-        "Sales and marketing",
-        "Manufacturing expansion",
-        "Production capacity",
-        "Working capital",
-        "Acquisitions and investments",
-        "Overseas expansion",
-    }
-)
+_CATEGORY_VOCAB: frozenset[str] = frozenset(CATEGORY_L2)
 
 # ── Required top-level fields ─────────────────────────────────────────────────
 
@@ -168,6 +156,12 @@ def validate_record(
     # ── [category_vocab] ─────────────────────────────────────────────────────
     for u in top_uses:
         cat = u.get("category", "")
+        category_proposed = u.get("category_proposed")
+        # Skip the vocab check when category_proposed is set — this signals an
+        # intentional "no standard match" item where the LLM chose the closest
+        # label but flagged it as imprecise via category_proposed.
+        if category_proposed:
+            continue
         if cat not in _CATEGORY_VOCAB:
             warnings.append(
                 f"[category_vocab] use_id={u.get('use_id')!r}: "

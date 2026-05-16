@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -25,26 +26,37 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import openai
-
 import langextract as lx
+import openai
 from langextract.factory import ModelConfig
+from pydantic import ValidationError
 
 from hk_ipo import config
+from hk_ipo.schema import CATEGORY_L2, validate_extraction
+
+logger = logging.getLogger(__name__)
 
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
 
-_PROMPT = """\
+def _build_prompt() -> str:
+    """Build the extraction prompt dynamically from CATEGORY_L2 (single source of truth)."""
+    category_list = "\n".join(f'                        "{c}"' for c in CATEGORY_L2)
+    return f"""\
 Extract top-level use-of-proceeds items from the IPO prospectus section.
 Read ONLY from the bullet list. Skip Markdown table rows (lines starting with |).
 
-TOP-LEVEL items are bullets that START with "Approximately" or "approximately"
-with NO preceding roman numeral or letter in parentheses.
+TOP-LEVEL items are bullets at the LEFTMOST margin — they start with "- Approximately"
+or "- approximately" with NO leading spaces. Lines that begin with spaces (indented)
+are sub-items that belong to their parent bullet; do NOT extract them separately.
+
+COMPLETENESS: Extract ALL top-level bullets. Do not stop early. A typical section
+has 2–8 top-level items. Two different items may share the same percentage value —
+extract each one separately.
 
 ► extraction_text MUST be the COMPLETE bullet paragraph — include ALL sentences
   of that bullet, not just the first sentence.
-  Stop at the next "- Approximately"/"- approximately" line.
+  Stop at the next "- Approximately"/"- approximately" line at the left margin.
 
 ► Skip any inline sub-enumerations "(i) X, (ii) Y" — do NOT extract them as
   separate items.
@@ -55,13 +67,15 @@ FOR EACH top-level item, produce a use_of_proceeds_item with attributes:
   amount_hkd_million: HK$ millions string, e.g. "10893.0"
                       Use "null" only if genuinely absent.
   category          : short normalised label, choose best fit from:
-                        "R&D and technology", "Product development",
-                        "Sales and marketing", "Manufacturing expansion",
-                        "Production capacity", "Working capital",
-                        "Acquisitions and investments", "Overseas expansion"
+{category_list}
+  category_proposed : if no category fits well, put the raw label here and set
+                      category to the closest standard match above
   category_raw      : verbatim use-description phrase from source
   description       : 1–2 sentence summary, max 200 chars\
 """
+
+
+_PROMPT = _build_prompt()
 
 
 # ── Few-shot example texts ────────────────────────────────────────────────────
@@ -293,10 +307,19 @@ def _build_model_config() -> ModelConfig:
 
 _TABLE_LINE_RE = re.compile(r"^\s*\|")
 _PAGE_MARKER_RE = re.compile(r"^[\s–—-]*\d{1,4}[\s–—-]*$")
+# Matches the leading "  - " (2+ spaces then dash+space) of an indented sub-bullet.
+# We neutralise these by removing the dash so the LLM cannot confuse them with
+# top-level bullets.
+_INDENTED_BULLET_RE = re.compile(r"^(\s{2,})-\s", re.MULTILINE)
 
 
 def _clean_section_text(text: str) -> str:
-    """Remove Markdown table rows and page-number footers; collapse blank lines."""
+    """Remove Markdown table rows and page-number footers; collapse blank lines.
+
+    Also converts indented sub-bullets ("   - approximately X%") to plain
+    continuation prose ("     approximately X%") so the LLM cannot mistake
+    them for independent top-level extraction targets.
+    """
     cleaned = []
     for line in text.splitlines():
         s = line.strip()
@@ -305,7 +328,10 @@ def _clean_section_text(text: str) -> str:
         if _PAGE_MARKER_RE.match(s) and len(s) < 20:
             continue
         cleaned.append(line)
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(cleaned)).strip()
+    result = "\n".join(cleaned)
+    # Neutralise indented sub-bullet dashes: "   - " → "     "
+    result = _INDENTED_BULLET_RE.sub(r"\1  ", result)
+    return re.sub(r"\n{3,}", "\n\n", result).strip()
 
 
 # ── Total proceeds extraction ─────────────────────────────────────────────────
@@ -424,6 +450,7 @@ def _parse_extractions(
                 "use_id": use_id,
                 "parent_id": None,
                 "category": attrs.get("category", ""),
+                "category_proposed": attrs.get("category_proposed") or None,
                 "category_raw": attrs.get("category_raw", ""),
                 "amount_hkd_million": _safe_float_or_none(attrs.get("amount_hkd_million")),
                 "percentage": _safe_float_or_none(attrs.get("percentage")),
@@ -446,7 +473,7 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
     hk_ticker: str | None = section_data.get("hk_ticker")
     document_date: str | None = section_data.get("document_date")
     if hk_ticker is None and document_date is None:
-        print(f"  [WARN] hk_ticker/document_date missing — re-run L1 to populate")
+        print("  [WARN] hk_ticker/document_date missing — re-run L1 to populate")
 
     doc: lx.data.AnnotatedDocument = _run_with_retry(
         lambda: lx.extract(
@@ -462,7 +489,7 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
     top_uses = [u for u in uses if u["parent_id"] is None]
     pct_sum = round(sum(u["percentage"] or 0 for u in top_uses), 1)
 
-    return {
+    result = {
         "company_file": section_data["company_file"],
         "section_source": Path(section_data["company_file"]).stem + ".json",
         "hk_ticker": hk_ticker,
@@ -478,6 +505,18 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
             "total_items_count": len(uses),
         },
     }
+
+    # Schema validation — log WARNING on failure but do not crash.
+    try:
+        validate_extraction(result)
+    except ValidationError as exc:
+        logger.warning(
+            "[WARN] Schema validation failed for %s: %s",
+            section_data.get("company_file", "?"),
+            exc,
+        )
+
+    return result
 
 
 # ── File I/O ──────────────────────────────────────────────────────────────────
