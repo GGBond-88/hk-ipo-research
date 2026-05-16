@@ -2,7 +2,7 @@
 .env
 
 # Raw data (large files, not tracked)
-data/raw_pdfs/
+data/raw_pdfs/*.pdf
 data/sections/
 data/extracted/
 
