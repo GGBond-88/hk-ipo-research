@@ -17,6 +17,8 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import io
 import json
 import logging
 import re
@@ -164,7 +166,7 @@ _EX3_TEXT = (
 )
 
 
-def _build_examples() -> list[lx.data.ExampleData]:
+def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
     return [
         # ── Example 1 : CATL, no sub-items ───────────────────────────────────
         lx.data.ExampleData(
@@ -286,6 +288,12 @@ def _build_examples() -> list[lx.data.ExampleData]:
     ]
 
 
+# Module-level constant: built once at import time.
+# Thread-safe because it is immutable after module load — no shared mutable state.
+# All worker threads in ThreadPoolExecutor read from this same object without racing.
+_EXAMPLES = _build_examples()
+
+
 # ── Model config ──────────────────────────────────────────────────────────────
 
 def _build_model_config() -> ModelConfig:
@@ -342,11 +350,29 @@ _PROCEEDS_RE = re.compile(
 )
 
 
-def _extract_total_proceeds(text: str) -> tuple[float | None, str]:
-    m = _PROCEEDS_RE.search(text)
-    if m:
-        return float(m.group(1).replace(",", "")), "HKD"
-    return None, "HKD"
+def _extract_total_proceeds(text: str) -> tuple[float | None, str, list[float]]:
+    """Extract the total net proceeds figure from the section text.
+
+    Finds ALL candidate proceeds figures and takes the LAST match.
+    Rationale: prospectuses typically restate the net proceeds figure
+    near the bullet list, and the last mention is the most specific
+    (the opening sentence often gives an approximate figure, while the
+    sentence immediately before the bullet list gives the precise figure).
+
+    Returns
+    -------
+    (value, currency, candidates)
+        value:      The last (most specific) proceeds figure, or None.
+        currency:   Always "HKD".
+        candidates: All distinct proceeds values found (empty if none).
+                    Useful for L3 inspection when multiple figures appear.
+    """
+    matches = list(_PROCEEDS_RE.finditer(text))
+    if not matches:
+        return None, "HKD", []
+    candidates = [float(m.group(1).replace(",", "")) for m in matches]
+    # Take the LAST match — most specific restatement in the text.
+    return candidates[-1], "HKD", candidates
 
 
 # ── Source text completion ────────────────────────────────────────────────────
@@ -357,17 +383,34 @@ _NEXT_TOP_BULLET_RE = re.compile(
 _MD_HEADING_RE = re.compile(r"\n#{1,4}\s+|\n\*\*[A-Z]")
 
 
-def _extend_source_text(extraction_text: str, full_text: str) -> str:
+def _extend_source_text(
+    extraction_text: str,
+    full_text: str,
+    use_id: str = "",
+    company_file: str = "",
+) -> str:
     """Extend a (possibly truncated) extraction_text to the full bullet paragraph.
 
     Finds the extraction_text in full_text, then extends rightward to the
     next top-level bullet start, the next Markdown heading, or end of text.
+
+    Parameters
+    ----------
+    extraction_text: The (possibly truncated) text from the LLM extraction.
+    full_text:       The full cleaned section text to search within.
+    use_id:          Optional use_id for diagnostic logging.
+    company_file:    Optional company file name for diagnostic logging.
     """
     if not extraction_text:
         return extraction_text
     anchor = extraction_text[:60].strip()
     pos = full_text.find(anchor)
     if pos == -1:
+        logger.warning(
+            "[WARN] _extend_source_text: anchor not found for use_id=%s in %s",
+            use_id,
+            company_file,
+        )
         return extraction_text  # can't locate; keep as-is
 
     search_start = pos + len(anchor)
@@ -393,11 +436,36 @@ def _extend_source_text(extraction_text: str, full_text: str) -> str:
 _RETRYABLE = (openai.APIError, httpx.HTTPError, TimeoutError, ConnectionError)
 
 
-def _run_with_retry(fn: Any, max_retries: int = 3) -> Any:
+def _run_with_retry(fn: Any, max_retries: int = 5) -> Any:
+    """Run fn(), retrying on transient errors with exponential backoff.
+
+    Special handling for HTTP 429 (RateLimitError): if a Retry-After header
+    is present, sleep exactly that many seconds instead of using backoff.
+    For all other retryable errors, use exponential backoff (2^attempt seconds).
+    max_retries defaults to 5.
+    """
     last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
             return fn()
+        except openai.RateLimitError as exc:
+            last_exc = exc
+            if attempt < max_retries - 1:
+                # Check for Retry-After header (present on some 429 responses)
+                retry_after: float | None = None
+                if hasattr(exc, "response") and exc.response is not None:
+                    ra = exc.response.headers.get("Retry-After")
+                    if ra is not None:
+                        try:
+                            retry_after = float(ra)
+                        except (ValueError, TypeError):
+                            retry_after = None
+                wait = retry_after if retry_after is not None else 2 ** attempt
+                print(
+                    f"  [RETRY] 429 RateLimitError, attempt {attempt + 1}. "
+                    f"Waiting {wait}s…"
+                )
+                time.sleep(wait)
         except _RETRYABLE as exc:
             last_exc = exc
             if attempt < max_retries - 1:
@@ -423,7 +491,9 @@ def _safe_float_or_none(val: Any) -> float | None:
 
 
 def _parse_extractions(
-    doc: lx.data.AnnotatedDocument, full_text: str
+    doc: lx.data.AnnotatedDocument,
+    full_text: str,
+    company_file: str = "",
 ) -> list[dict[str, Any]]:
     """Convert langextract output to top-level uses list.
 
@@ -443,7 +513,9 @@ def _parse_extractions(
             continue
 
         use_id = f"use_{len(uses) + 1:03d}"
-        source_text = _extend_source_text(ext.extraction_text or "", full_text)
+        source_text = _extend_source_text(
+            ext.extraction_text or "", full_text, use_id=use_id, company_file=company_file
+        )
 
         uses.append(
             {
@@ -467,7 +539,7 @@ def _parse_extractions(
 def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
     """Run LLM extraction on an L1 section dict; return the L2 output dict."""
     text = _clean_section_text(section_data["text"])
-    total_proceeds, currency = _extract_total_proceeds(text)
+    total_proceeds, currency, proceeds_candidates = _extract_total_proceeds(text)
 
     # Metadata populated by L1; warn once if keys are absent (stale L1 output)
     hk_ticker: str | None = section_data.get("hk_ticker")
@@ -479,17 +551,19 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
         lambda: lx.extract(
             text_or_documents=text,
             prompt_description=_PROMPT,
-            examples=_build_examples(),
+            examples=_EXAMPLES,
             config=_build_model_config(),
         )
     )
 
-    uses = _parse_extractions(doc, text)
+    uses = _parse_extractions(doc, text, company_file=section_data.get("company_file", ""))
 
     top_uses = [u for u in uses if u["parent_id"] is None]
     pct_sum = round(sum(u["percentage"] or 0 for u in top_uses), 1)
 
-    result = {
+    # Record all distinct candidate proceeds values for L3 inspection.
+    distinct_candidates = sorted(set(proceeds_candidates))
+    result: dict[str, Any] = {
         "company_file": section_data["company_file"],
         "section_source": Path(section_data["company_file"]).stem + ".json",
         "hk_ticker": hk_ticker,
@@ -505,6 +579,8 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
             "total_items_count": len(uses),
         },
     }
+    if len(distinct_candidates) > 1:
+        result["proceeds_candidates"] = distinct_candidates
 
     # Schema validation — log WARNING on failure but do not crash.
     try:
@@ -521,12 +597,30 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
 
 # ── File I/O ──────────────────────────────────────────────────────────────────
 
-def process_single(section_file: Path, extracted_dir: Path) -> dict[str, Any]:
+def process_single(
+    section_file: Path,
+    extracted_dir: Path,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Extract one section file; write output JSON.
+
+    Parameters
+    ----------
+    section_file:   Path to the L1 section JSON.
+    extracted_dir:  Directory to write the extracted output JSON.
+    force:          If False (default), skip files whose output already exists.
+    """
     extracted_dir.mkdir(parents=True, exist_ok=True)
-    section_data = json.loads(section_file.read_text(encoding="utf-8"))
     stem = section_file.stem
     out_path = extracted_dir / f"{stem}.json"
     err_path = extracted_dir / f"{stem}.error.json"
+
+    # Resumability: skip if output already exists (unless --force).
+    if not force and out_path.exists():
+        print(f"[SKIP] already done: {out_path.name}")
+        return json.loads(out_path.read_text(encoding="utf-8"))
+
+    section_data = json.loads(section_file.read_text(encoding="utf-8"))
 
     print(f"\n→ {section_file.name}")
     try:
@@ -553,20 +647,80 @@ def process_single(section_file: Path, extracted_dir: Path) -> dict[str, Any]:
     return result
 
 
-def process_all(sections_dir: Path, extracted_dir: Path) -> None:
+def process_all(
+    sections_dir: Path,
+    extracted_dir: Path,
+    max_workers: int = 6,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Extract all section JSON files in sections_dir using a thread pool.
+
+    Each file's log output is captured into a string buffer and printed
+    atomically to avoid interleaved output from concurrent workers.
+
+    Parameters
+    ----------
+    sections_dir:   Directory containing L1 section JSON files.
+    extracted_dir:  Directory to write extracted output JSON files.
+    max_workers:    Thread pool size (default 6).
+    force:          If True, re-process files even if output already exists.
+
+    Returns
+    -------
+    Summary dict: {"succeeded": int, "failed": int, "skipped": int, "total": int}
+    """
     jsons = sorted(sections_dir.glob("*.json"))
     if not jsons:
         print(f"[WARN] No JSON files found in {sections_dir}")
-        return
-    succeeded = failed = 0
-    for jf in jsons:
+        return {"succeeded": 0, "failed": 0, "skipped": 0, "total": 0}
+
+    succeeded = failed = skipped = 0
+
+    def _process_one(jf: Path) -> tuple[str, bool, str]:
+        """Process one file; return (filename, ok, log_output)."""
+        buf = io.StringIO()
+        out_path = extracted_dir / f"{jf.stem}.json"
+        if not force and out_path.exists():
+            buf.write(f"[SKIP] already done: {out_path.name}\n")
+            return jf.name, True, buf.getvalue()
+
+        buf.write(f"\n→ {jf.name}\n")
         try:
-            process_single(jf, extracted_dir)
-            succeeded += 1
+            section_data = json.loads(jf.read_text(encoding="utf-8"))
+            result = extract_section(section_data)
+            extracted_dir.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            vp = result["validation_preview"]
+            buf.write(f"  top-level   : {vp['top_level_count']} items\n")
+            buf.write(f"  total items : {vp['total_items_count']} (incl. sub-items)\n")
+            buf.write(f"  pct sum     : {vp['percentage_sum']}%\n")
+            buf.write(f"  total HK$M  : {result['total_net_proceeds_hkd_million']}\n")
+            buf.write(f"  → saved to  : {out_path.name}\n")
+            return jf.name, True, buf.getvalue()
         except Exception as exc:
-            failed += 1
-            print(f"  [SKIP] {jf.name}: {exc}")
-    print(f"\nL2 complete: {succeeded} succeeded, {failed} failed")
+            buf.write(f"  [ERROR] {exc}\n")
+            return jf.name, False, buf.getvalue()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_process_one, jf): jf for jf in jsons}
+        for future in concurrent.futures.as_completed(futures):
+            filename, ok, log_output = future.result()
+            print(log_output, end="")
+            out_path = extracted_dir / f"{Path(filename).stem}.json"
+            if not force and out_path.exists() and "[SKIP]" in log_output:
+                skipped += 1
+            elif ok:
+                succeeded += 1
+            else:
+                failed += 1
+
+    print(
+        f"\nL2 complete: {succeeded} succeeded, {failed} failed, "
+        f"{skipped} skipped (of {len(jsons)} total)"
+    )
+    return {"succeeded": succeeded, "failed": failed, "skipped": skipped, "total": len(jsons)}
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -580,6 +734,14 @@ if __name__ == "__main__":
                        help="Process one file from data/sections/ by name")
     group.add_argument("--all", action="store_true",
                        help="Process all files in data/sections/")
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Re-process files even if output already exists",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=6, metavar="N",
+        help="Number of parallel worker threads for --all (default 6)",
+    )
     args = parser.parse_args()
 
     from hk_ipo.config import EXTRACTED_DIR, SECTIONS_DIR
@@ -592,9 +754,9 @@ if __name__ == "__main__":
             import sys
             print(f"[ERROR] Not found: {sf}")
             sys.exit(1)
-        process_single(sf, EXTRACTED_DIR)
+        process_single(sf, EXTRACTED_DIR, force=args.force)
     elif args.all:
-        process_all(SECTIONS_DIR, EXTRACTED_DIR)
+        process_all(SECTIONS_DIR, EXTRACTED_DIR, max_workers=args.workers, force=args.force)
     else:
         parser.error(
             "Specify --single <filename.json> or --all. "
