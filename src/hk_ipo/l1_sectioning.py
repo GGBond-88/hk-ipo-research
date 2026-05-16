@@ -34,6 +34,58 @@ _MD_HEADING_RE = re.compile(r"^(#{1,4})\s+(.+)", re.MULTILINE)
 # pymupdf4llm 有时把章节标题输出为加粗段落而非 # 标题，单独捕获
 _MD_BOLD_RE = re.compile(r"^\*\*(.+?)\*\*\s*$", re.MULTILINE)
 
+# ── Cover-page metadata regex ────────────────────────────────────────────────
+_TICKER_RE = re.compile(r"[Ss]tock\s+[Cc]ode[\s:：]+(\d{4,5})", re.IGNORECASE)
+_DATE_COVER_RE = re.compile(
+    r"(\d{1,2})\s+"
+    r"(January|February|March|April|May|June|July|August"
+    r"|September|October|November|December)\s+(\d{4})",
+    re.IGNORECASE,
+)
+_MONTHS_MAP = {
+    "january": "01", "february": "02", "march": "03", "april": "04",
+    "may": "05", "june": "06", "july": "07", "august": "08",
+    "september": "09", "october": "10", "november": "11", "december": "12",
+}
+_DATE_FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})")
+
+
+def _parse_date_from_filename(filename: str) -> str | None:
+    """Return ISO date from embedded YYYYMMDD in filenames like ltn20180907011."""
+    m = _DATE_FILENAME_RE.search(filename)
+    if m:
+        y, mo, d = m.group(1), m.group(2), m.group(3)
+        if 2000 <= int(y) <= 2099 and 1 <= int(mo) <= 12 and 1 <= int(d) <= 31:
+            return f"{y}-{mo}-{d}"
+    return None
+
+
+def _ticker_from_markdown(cover_md: str) -> str | None:
+    """Return HK stock ticker from cover-page markdown, or None."""
+    m = _TICKER_RE.search(cover_md)
+    return m.group(1).strip() if m else None
+
+
+def _date_from_markdown(cover_md: str, filename: str) -> str | None:
+    """Return ISO document date from cover markdown; fall back to filename."""
+    matches = list(_DATE_COVER_RE.finditer(cover_md))
+    if matches:
+        dm = matches[-1]
+        return f"{dm.group(3)}-{_MONTHS_MAP[dm.group(2).lower()]}-{int(dm.group(1)):02d}"
+    return _parse_date_from_filename(filename)
+
+
+def _extract_ticker(doc: pymupdf.Document) -> str | None:
+    """Read first 3 pages and return HK stock ticker, or None."""
+    pages = list(range(min(3, doc.page_count)))
+    return _ticker_from_markdown(pymupdf4llm.to_markdown(doc, pages=pages))
+
+
+def _extract_document_date(doc: pymupdf.Document, filename: str) -> str | None:
+    """Read first 3 pages and return ISO document date; fall back to filename."""
+    pages = list(range(min(3, doc.page_count)))
+    return _date_from_markdown(pymupdf4llm.to_markdown(doc, pages=pages), filename)
+
 
 def _matches_section_title(title: str) -> bool:
     """判断字符串是否是 Use of Proceeds 章节标题（大小写不敏感）。
@@ -215,6 +267,9 @@ def extract_use_of_proceeds(pdf_path: str) -> dict[str, Any]:
     """
     doc = pymupdf.open(pdf_path)
     try:
+        hk_ticker = _extract_ticker(doc)
+        document_date = _extract_document_date(doc, Path(pdf_path).name)
+
         result = _locate_via_toc(doc)
         method = "toc"
         if result is None:
@@ -232,6 +287,8 @@ def extract_use_of_proceeds(pdf_path: str) -> dict[str, Any]:
 
     return {
         "company_file": Path(pdf_path).name,
+        "hk_ticker": hk_ticker,
+        "document_date": document_date,
         "section_title": section_title,
         "start_page": start_page,
         "end_page": end_page,
@@ -265,6 +322,8 @@ def process_all(raw_dir: Path, sections_dir: Path) -> None:
         word_count = len(data["text"].split())
         print(f"  method      : {data['extraction_method']}")
         print(f"  section     : {data['section_title']!r}")
+        print(f"  ticker      : {data['hk_ticker']}")
+        print(f"  date        : {data['document_date']}")
         print(f"  pages       : {data['start_page']}–{data['end_page']}")
         print(f"  text words  : {word_count:,}")
         print(f"  tables found: {len(data['tables'])}")

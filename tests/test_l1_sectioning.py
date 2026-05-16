@@ -13,9 +13,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hk_ipo.l1_sectioning import (
+    _date_from_markdown,
     _locate_in_markdown,
     _locate_in_toc_list,
     _matches_section_title,
+    _parse_date_from_filename,
+    _ticker_from_markdown,
     extract_use_of_proceeds,
 )
 
@@ -229,7 +232,8 @@ Final section with no heading after it.
 # ─────────────────────────────────────────────────────────────────────────────
 
 _REQUIRED_FIELDS = {
-    "company_file", "section_title", "start_page", "end_page",
+    "company_file", "hk_ticker", "document_date",
+    "section_title", "start_page", "end_page",
     "text", "tables", "extraction_method",
 }
 
@@ -301,3 +305,71 @@ class TestExtractUsOfProceedsSchema:
         ):
             with pytest.raises(ValueError, match="Cannot locate"):
                 extract_use_of_proceeds("fake.pdf")
+
+    def test_output_contains_hk_ticker_and_document_date(self):
+        """New schema fields hk_ticker and document_date must always be present."""
+        toc = [[1, "USE OF PROCEEDS", 5], [1, "NEXT", 10]]
+        result = self._run_with_toc(toc)
+        assert "hk_ticker" in result
+        assert "document_date" in result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Part 3: cover-page metadata helpers (_ticker_from_markdown, _date_from_markdown)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestTickerFromMarkdown:
+    """Pure-function tests — no PDF I/O, no mocking needed."""
+
+    def test_happy_path_returns_ticker(self):
+        md = "Global Offering\nStock Code: 3690\nOffer price HK$66"
+        assert _ticker_from_markdown(md) == "3690"
+
+    def test_case_insensitive_match(self):
+        md = "stock code : 3750"
+        assert _ticker_from_markdown(md) == "3750"
+
+    def test_full_width_colon_accepted(self):
+        md = "Stock Code：6031"
+        assert _ticker_from_markdown(md) == "6031"
+
+    def test_returns_none_when_no_match(self):
+        assert _ticker_from_markdown("No ticker information here.") is None
+
+    def test_returns_none_on_empty_string(self):
+        assert _ticker_from_markdown("") is None
+
+
+class TestDateFromMarkdown:
+    """Pure-function tests — no PDF I/O, no mocking needed."""
+
+    def test_cover_date_takes_precedence_over_filename(self):
+        # Cover says "7 September 2018"; filename would give "2025-05-12"
+        md = "The closing date for applications is 7 September 2018."
+        assert _date_from_markdown(md, "2025051200005") == "2018-09-07"
+
+    def test_uses_last_date_when_multiple_present(self):
+        # Only the last date match is used (prospectus print date is near the bottom)
+        md = "Founded 1 January 2000.\n\nThis prospectus is dated 12 May 2025."
+        assert _date_from_markdown(md, "ltn00000000000") == "2025-05-12"
+
+    def test_falls_back_to_filename_when_cover_has_no_date(self):
+        assert _date_from_markdown("No date found here.", "ltn20180907011") == "2018-09-07"
+
+    def test_returns_none_when_both_sources_missing(self):
+        # filename "fake.pdf" has no YYYYMMDD embedded
+        assert _date_from_markdown("No date.", "fake.pdf") is None
+
+
+class TestParseDateFromFilename:
+    def test_ltn_format(self):
+        assert _parse_date_from_filename("ltn20180907011") == "2018-09-07"
+
+    def test_numeric_format(self):
+        assert _parse_date_from_filename("2025051200005") == "2025-05-12"
+
+    def test_returns_none_for_no_date(self):
+        assert _parse_date_from_filename("fake") is None
+
+    def test_rejects_invalid_month(self):
+        assert _parse_date_from_filename("ltn20181307011") is None  # month=13
