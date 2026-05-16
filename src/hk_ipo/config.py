@@ -1,9 +1,9 @@
 """项目配置：从 .env 加载密钥，定义各数据层目录的路径常量。"""
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -19,4 +19,5 @@ OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
 # L2 model config — override via env vars if needed
 L2_TEXT_MODEL: str = os.getenv("L2_TEXT_MODEL", "deepseek/deepseek-v4-pro")
-L2_VISION_MODEL: str = os.getenv("L2_VISION_MODEL", "google/gemini-2.5-flash-preview-05-20")  # future vision fallback, unused in MVP
+# future vision fallback — unused in MVP
+L2_VISION_MODEL: str = os.getenv("L2_VISION_MODEL", "google/gemini-2.5-flash-preview-05-20")

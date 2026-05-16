@@ -22,7 +22,6 @@ from hk_ipo.l1_sectioning import (
     extract_use_of_proceeds,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Part 1a: _matches_section_title
 # ─────────────────────────────────────────────────────────────────────────────
@@ -257,7 +256,10 @@ class TestExtractUsOfProceedsSchema:
         doc = _make_mock_doc(toc)
         with (
             patch("hk_ipo.l1_sectioning.pymupdf.open", return_value=doc),
-            patch("hk_ipo.l1_sectioning.pymupdf4llm.to_markdown", return_value="## USE OF PROCEEDS\n\nText."),
+            patch(
+                "hk_ipo.l1_sectioning.pymupdf4llm.to_markdown",
+                return_value="## USE OF PROCEEDS\n\nText.",
+            ),
             patch("hk_ipo.l1_sectioning.pdfplumber.open") as mock_plumber,
         ):
             mock_plumber.return_value.__enter__.return_value.pages = []
@@ -301,7 +303,10 @@ class TestExtractUsOfProceedsSchema:
         doc = _make_mock_doc(toc=[], page_count=100)
         with (
             patch("hk_ipo.l1_sectioning.pymupdf.open", return_value=doc),
-            patch("hk_ipo.l1_sectioning.pymupdf4llm.to_markdown", return_value="## RISK FACTORS\n\nNo proceeds here.\n"),
+            patch(
+                "hk_ipo.l1_sectioning.pymupdf4llm.to_markdown",
+                return_value="## RISK FACTORS\n\nNo proceeds here.\n",
+            ),
         ):
             with pytest.raises(ValueError, match="Cannot locate"):
                 extract_use_of_proceeds("fake.pdf")

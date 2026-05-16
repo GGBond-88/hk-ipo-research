@@ -7,8 +7,8 @@
   - 时序趋势（按 IPO 日期）
 """
 
-import pandas as pd  # noqa: F401
 import matplotlib.pyplot as plt  # noqa: F401
+import pandas as pd  # noqa: F401
 
 
 def run_analysis(extracted_dir: str) -> None:

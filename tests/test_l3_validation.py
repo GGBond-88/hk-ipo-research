@@ -27,10 +27,7 @@ Test inventory (16 tests):
 import json
 from pathlib import Path
 
-import pytest
-
-from hk_ipo.l3_validation import validate_record, validate_file
-
+from hk_ipo.l3_validation import validate_file, validate_record
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared fixtures
@@ -407,7 +404,7 @@ class TestValidateFile:
         src = tmp_path / "ltn20180907011.json"
         src.write_text(json.dumps(extracted, ensure_ascii=False), encoding="utf-8")
 
-        result = validate_file(src, tmp_path, tolerance_pct=1.0)
+        validate_file(src, tmp_path, tolerance_pct=1.0)
 
         # Output file must exist
         out = tmp_path / "ltn20180907011.validated.json"

@@ -179,8 +179,13 @@ def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
                         "percentage": "90.0",
                         "amount_hkd_million": "27646.1",
                         "category": "Manufacturing expansion",
-                        "category_raw": "advance the construction of Phase I and II of our Hungary project",
-                        "description": "Build EV battery factory in Hungary with 72 GWh total capacity (Phase I 34 GWh + Phase II 38 GWh).",
+                        "category_raw": (
+                            "advance the construction of Phase I and II of our Hungary project"
+                        ),
+                        "description": (
+                            "Build EV battery factory in Hungary with 72 GWh total capacity"
+                            " (Phase I 34 GWh + Phase II 38 GWh)."
+                        ),
                     },
                 ),
                 lx.data.Extraction(
@@ -207,8 +212,14 @@ def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
                         "percentage": "35.0",
                         "amount_hkd_million": "10893.0",
                         "category": "R&D and technology",
-                        "category_raw": "upgrade our technology and enhance our research and development capabilities",
-                        "description": "Hire experts, expand IP portfolio, invest in IT and AI; fund R&D in data analytics, ML, and driverless delivery.",
+                        "category_raw": (
+                            "upgrade our technology and enhance our research"
+                            " and development capabilities"
+                        ),
+                        "description": (
+                            "Hire experts, expand IP portfolio, invest in IT and AI;"
+                            " fund R&D in data analytics, ML, and driverless delivery."
+                        ),
                     },
                 ),
                 lx.data.Extraction(
@@ -219,7 +230,10 @@ def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
                         "amount_hkd_million": "10893.0",
                         "category": "Product development",
                         "category_raw": "develop new services and products",
-                        "description": "Develop merchant enabling systems, on-demand food delivery, and restaurant supply chain services.",
+                        "description": (
+                            "Develop merchant enabling systems, on-demand food delivery,"
+                            " and restaurant supply chain services."
+                        ),
                     },
                 ),
                 lx.data.Extraction(
@@ -229,8 +243,14 @@ def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
                         "percentage": "20.0",
                         "amount_hkd_million": "6225.0",
                         "category": "Acquisitions and investments",
-                        "category_raw": "selectively pursue acquisitions or investments in assets and businesses",
-                        "description": "Identify, invest in, and incubate complementary companies aligned with business strategies.",
+                        "category_raw": (
+                            "selectively pursue acquisitions or investments"
+                            " in assets and businesses"
+                        ),
+                        "description": (
+                            "Identify, invest in, and incubate complementary companies"
+                            " aligned with business strategies."
+                        ),
                     },
                 ),
                 lx.data.Extraction(
@@ -257,8 +277,14 @@ def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
                         "percentage": "71.4",
                         "amount_hkd_million": "1526.9",
                         "category": "Production capacity",
-                        "category_raw": "expand our overall production capacity and upgrade our production lines",
-                        "description": "Build/expand plants, install production lines, and purchase equipment across multiple countries.",
+                        "category_raw": (
+                            "expand our overall production capacity"
+                            " and upgrade our production lines"
+                        ),
+                        "description": (
+                            "Build/expand plants, install production lines, and purchase equipment"
+                            " across multiple countries."
+                        ),
                     },
                 ),
                 lx.data.Extraction(
@@ -269,7 +295,9 @@ def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
                         "amount_hkd_million": "248.4",
                         "category": "R&D and technology",
                         "category_raw": "research and development and product innovation",
-                        "description": "Develop new products, expand R&D team, and conduct product testing.",
+                        "description": (
+                            "Develop new products, expand R&D team, and conduct product testing."
+                        ),
                     },
                 ),
                 lx.data.Extraction(
