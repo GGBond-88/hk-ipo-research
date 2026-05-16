@@ -28,6 +28,7 @@ import json
 from pathlib import Path
 
 from hk_ipo.l3_validation import validate_file, validate_record
+from hk_ipo.schema import CATEGORY_L2, SCHEMA_VERSION
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared fixtures
@@ -453,3 +454,83 @@ class TestIdempotence:
         original = copy.deepcopy(rec)
         validate_record(rec)
         assert rec == original
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests: [category_l1]
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCategoryL1:
+    def test_out_of_vocab_category_deferred_to_category_vocab_not_l1(self):
+        """An out-of-vocab category produces [category_vocab] WARNING, not [category_l1] ERROR.
+
+        [category_l1] is only checked for vocab-member categories to avoid double-reporting.
+        Out-of-vocab categories are caught exclusively by [category_vocab].
+        """
+        rec = _meituan()
+        rec["uses"][0] = {
+            "use_id": "use_001",
+            "parent_id": None,
+            "category": "Fake Category",
+            "category_proposed": None,
+            "category_raw": "fake",
+            "amount_hkd_million": round(31123.0 * 0.35, 2),
+            "percentage": 35.0,
+            "description": "Fake.",
+            "source_text": "approximately 35%...",
+        }
+        passed, errors, warnings = validate_record(rec)
+        # [category_vocab] warning fires (not an error)
+        assert any("[category_vocab]" in w and "Fake Category" in w for w in warnings)
+        # [category_l1] does NOT fire because out-of-vocab is deferred to [category_vocab]
+        assert not any("[category_l1]" in e for e in errors)
+        # record still passes (category_vocab is warning-only)
+        assert passed is True
+
+    def test_category_l1_exempt_when_category_proposed_set(self):
+        """When category_proposed is set, [category_l1] check is skipped."""
+        rec = _meituan()
+        rec["uses"][0]["category"] = "Fake Category"
+        rec["uses"][0]["category_proposed"] = "Some novel use"
+        _, errors, _ = validate_record(rec)
+        assert not any("[category_l1]" in e for e in errors)
+
+    def test_all_standard_category_l2_values_pass_l1_check(self):
+        """Every standard L2 category maps to an L1 — no [category_l1] errors."""
+        for cat in CATEGORY_L2:
+            rec = _meituan()
+            rec["uses"][0]["category"] = cat
+            _, errors, _ = validate_record(rec)
+            assert not any("[category_l1]" in e for e in errors), (
+                f"[category_l1] error unexpectedly fired for valid category {cat!r}"
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests: [schema_version]
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestSchemaVersion:
+    def test_absent_schema_version_is_warning(self):
+        """If schema_version is absent, a WARNING is emitted (never an error)."""
+        rec = _meituan()
+        # _meituan() does not include schema_version — it's absent by default
+        assert "schema_version" not in rec
+        passed, errors, warnings = validate_record(rec)
+        assert not any("[schema_version]" in e for e in errors)
+        assert any("[schema_version]" in w for w in warnings)
+
+    def test_mismatched_schema_version_is_warning(self):
+        """A different schema_version fires a WARNING (old data still processable)."""
+        rec = _meituan()
+        rec["schema_version"] = "0.9"
+        passed, errors, warnings = validate_record(rec)
+        assert not any("[schema_version]" in e for e in errors)
+        assert any("[schema_version]" in w and "0.9" in w for w in warnings)
+
+    def test_matching_schema_version_no_warning(self):
+        """When schema_version matches SCHEMA_VERSION exactly, no warning."""
+        rec = _meituan()
+        rec["schema_version"] = SCHEMA_VERSION
+        _, _, warnings = validate_record(rec)
+        assert not any("[schema_version]" in w for w in warnings)

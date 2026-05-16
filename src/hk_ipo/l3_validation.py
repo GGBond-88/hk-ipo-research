@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hk_ipo.schema import CATEGORY_L2
+from hk_ipo.schema import CATEGORY_L1_MAP, CATEGORY_L2, SCHEMA_VERSION
 
 # ── Allowed category vocabulary (imported from schema — single source of truth)
 
@@ -168,6 +168,41 @@ def validate_record(
                 f"category {cat!r} is not in the allowed vocabulary"
             )
 
+    # ── [category_l1] ────────────────────────────────────────────────────────
+    for u in top_uses:
+        cat = u.get("category")
+        category_proposed = u.get("category_proposed")
+        # Exempt when category_proposed is set (same exemption as [category_vocab])
+        if category_proposed:
+            continue
+        # Exempt when category is None (already caught by [required_fields] or
+        # [category_vocab] — no useful L1 check possible).
+        if cat is None:
+            continue
+        # Exempt when category is not in the allowed vocabulary — [category_vocab]
+        # already warns about it; we avoid double-reporting.
+        if cat not in _CATEGORY_VOCAB:
+            continue
+        if cat not in CATEGORY_L1_MAP:
+            errors.append(
+                f"[category_l1] use_id={u.get('use_id')!r}: "
+                f"category {cat!r} does not map to any L1 category"
+            )
+
+    # ── [schema_version] ─────────────────────────────────────────────────────
+    record_schema_version = extracted.get("schema_version")
+    if record_schema_version is None:
+        warnings.append(
+            f"[schema_version] schema_version absent from record "
+            f"(validated against SCHEMA_VERSION={SCHEMA_VERSION!r})"
+        )
+    elif str(record_schema_version) != SCHEMA_VERSION:
+        warnings.append(
+            f"[schema_version] record schema_version={record_schema_version!r} "
+            f"differs from current SCHEMA_VERSION={SCHEMA_VERSION!r}; "
+            "old data is still processable"
+        )
+
     passed = len(errors) == 0
     return passed, errors, warnings
 
@@ -198,6 +233,7 @@ def validate_file(
         "errors": errors,
         "warnings": warnings,
         "tolerance_pct": tolerance_pct,
+        "schema_version_validated_against": SCHEMA_VERSION,
         "validated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
