@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from hk_ipo import config  # noqa: E402
 from hk_ipo.l1_sectioning import extract_use_of_proceeds  # noqa: E402
 from hk_ipo.l2_extraction import process_single  # noqa: E402
+from hk_ipo.l3_validation import validate_file  # noqa: E402
 
 
 def main(pdf_path: str) -> None:
@@ -45,8 +46,17 @@ def main(pdf_path: str) -> None:
     vp = result["validation_preview"]
     print(f"     items   : {vp['top_level_count']} top-level, pct sum={vp['percentage_sum']}%")
 
-    # ── L3: validation (not yet implemented) ──────────────────────────────────
-    print("\n[L3] Validation — not yet implemented, skipping.")
+    # ── L3: validation ────────────────────────────────────────────────────────
+    print("\n[L3] Validating extracted data …")
+    extracted_path = config.EXTRACTED_DIR / f"{pdf.stem}.json"
+    validated = validate_file(extracted_path, config.EXTRACTED_DIR)
+    v = validated["validation"]
+    status = "PASS" if v["passed"] else "FAIL"
+    print(f"     result  : {status}")
+    for e in v["errors"]:
+        print(f"     ERROR   : {e}")
+    for w in v["warnings"]:
+        print(f"     WARN    : {w}")
 
     # ── L4: analysis (not yet implemented) ────────────────────────────────────
     print("\n[L4] Analysis — not yet implemented, skipping.")
