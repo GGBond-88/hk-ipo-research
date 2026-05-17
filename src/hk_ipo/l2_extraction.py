@@ -23,7 +23,7 @@ import openai
 from pydantic import ValidationError
 
 from hk_ipo import config
-from hk_ipo.schema import CATEGORY_L2, validate_extraction
+from hk_ipo.schema import CATEGORY_L2, SCHEMA_VERSION, validate_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,13 @@ _SYSTEM_PROMPT = (
     "- Express in HK$ millions (e.g. HK$1,000 million -> 1000.0).\n"
     "\n"
     "## Rules for uses array\n"
-    "- Extract TOP-LEVEL bullets only. Do not extract sub-items (i)(ii)(iii) separately.\n"
+    "- Extract TOP-LEVEL bullets only.\n"
+    "  A top-level item starts with a bullet marker (`-`) at the LEFT margin "
+    "(0-2 leading spaces).\n"
+    "  Sub-items are indented (≥4 spaces) or are lettered (i)(ii)(iii) inside a bullet.\n"
+    "  Each `- approximately X%` at the left margin is ONE top-level item; its entire paragraph\n"
+    "  including all sub-bullets belongs in that item's source_text.\n"
+    "  Do NOT create a separate entry for a sub-bullet or lettered clause.\n"
     "- source_text must be the COMPLETE paragraph for that bullet from the source.\n"
     "- category must be EXACTLY one of:\n"
     + _CATEGORY_LIST + "\n"
@@ -126,10 +132,12 @@ def _call_llm(text: str) -> dict[str, Any]:
             {"role": "user", "content": _build_user_prompt(text)},
         ],
         temperature=0.0,
-        max_tokens=8192,
+        max_tokens=16384,
         response_format={"type": "json_object"},
     )
     raw = response.choices[0].message.content or ""
+    if not raw.strip():
+        raise ValueError("LLM returned empty response (possible context overflow)")
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -149,10 +157,12 @@ def _call_llm_with_prompt(user_content: str) -> dict[str, Any]:
             {"role": "user", "content": user_content},
         ],
         temperature=0.0,
-        max_tokens=8192,
+        max_tokens=16384,
         response_format={"type": "json_object"},
     )
     raw = response.choices[0].message.content or ""
+    if not raw.strip():
+        raise ValueError("LLM returned empty response (possible context overflow)")
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -241,6 +251,7 @@ def _build_result(
         "document_date": document_date,
         "model_used": config.L2_TEXT_MODEL,
         "extraction_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "schema_version": SCHEMA_VERSION,
         "total_net_proceeds_hkd_million": total,
         "currency": "HKD",
         "uses": uses,

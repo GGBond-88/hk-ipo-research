@@ -288,6 +288,7 @@ class TestExtractSection:
         assert len(result["uses"]) == 1
         assert result["uses"][0]["use_id"] == "use_001"
         assert "validation_preview" in result
+        assert result.get("schema_version") == "1.0"
 
     def test_drops_items_with_no_financials(self):
         response = {
@@ -339,3 +340,69 @@ class TestExtractSection:
         with patch("hk_ipo.l2_extraction._call_llm") as mock_llm:
             process_single(section_file, extracted_dir, force=False)
         mock_llm.assert_not_called()
+
+
+# ── Test: empty-response guard ────────────────────────────────────────────────
+
+class TestEmptyResponseGuard:
+    """_call_llm and _call_llm_with_prompt must raise ValueError on empty content."""
+
+    def _mock_response(self, content: str) -> MagicMock:
+        choice = MagicMock()
+        choice.message.content = content
+        resp = MagicMock()
+        resp.choices = [choice]
+        return resp
+
+    def test_call_llm_raises_on_empty_content(self):
+        import pytest
+
+        from hk_ipo.l2_extraction import _call_llm
+
+        with patch(
+            "hk_ipo.l2_extraction._openai_client"
+        ) as mock_client:
+            mock_client.chat.completions.create.return_value = self._mock_response("")
+            with pytest.raises(ValueError, match="empty response"):
+                _call_llm("some text")
+
+    def test_call_llm_with_prompt_raises_on_empty_content(self):
+        import pytest
+
+        from hk_ipo.l2_extraction import _call_llm_with_prompt
+
+        with patch(
+            "hk_ipo.l2_extraction._openai_client"
+        ) as mock_client:
+            mock_client.chat.completions.create.return_value = self._mock_response("   ")
+            with pytest.raises(ValueError, match="empty response"):
+                _call_llm_with_prompt("some prompt")
+
+    def test_self_correction_empty_response_sets_needs_human_review(self):
+        """If correction call returns empty (ValueError), mark needs_human_review=True."""
+        section = {
+            "company_file": "test.pdf",
+            "hk_ticker": "9999",
+            "document_date": "2024-01-01",
+            "section_title": "USE OF PROCEEDS",
+            "start_page": 1,
+            "end_page": 2,
+            "text": "Net proceeds HK$1,000M.\n- 50% or HK$500M for working capital.\n",
+            "tables": [],
+            "extraction_method": "toc",
+        }
+        bad_response = {
+            "total_net_proceeds_hkd_million": 1000.0,
+            "uses": [{"category": "Working capital", "category_raw": "wc",
+                       "percentage": 50.0, "amount_hkd_million": 500.0,
+                       "description": "wc", "source_text": "50%..."}],
+        }
+
+        with patch("hk_ipo.l2_extraction._call_llm", return_value=bad_response), \
+             patch(
+                 "hk_ipo.l2_extraction._call_llm_with_prompt",
+                 side_effect=ValueError("LLM returned empty response (possible context overflow)"),
+             ):
+            result = extract_section(section)
+
+        assert result.get("needs_human_review") is True
