@@ -1,17 +1,8 @@
-"""L2 提取层：调用 LLM（langextract + OpenRouter）将 L1 输出的章节 Markdown 文本
-结构化提取为每个资金用途项目的 JSON 记录。
+"""L2 extraction layer: call LLM (direct OpenAI SDK + OpenRouter) to convert
+L1 section Markdown text into structured JSON records for use-of-proceeds items.
 
-层级结构：
-  - top-level 项（Approximately/approximately，无 (i)/(a) 前缀）→ parent_id = null
-  - inline sub-items（上级 bullet 正文里的 (i)(ii)(iii)，无独立金额）
-    → 通过 inline_sub_items 属性传递，post-processing 展开，parent_id 指向父项
-  - indented sub-bullets（独立缩进行，带 (i)(ii)(iii)，有独立金额）
-    → 直接作为独立 Extraction，parent_id 指向父项
-
-子项 parent_id 由 post-processing 用状态机分配，LLM 无需知道 use_id。
-
-输入：data/sections/<stem>.json
-输出：data/extracted/<stem>.json  /  .error.json（失败时）
+Input:  data/sections/<stem>.json
+Output: data/extracted/<stem>.json  /  .error.json (on failure)
 """
 
 from __future__ import annotations
@@ -28,9 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import langextract as lx
 import openai
-from langextract.factory import ModelConfig
 from pydantic import ValidationError
 
 from hk_ipo import config
@@ -38,314 +27,145 @@ from hk_ipo.schema import CATEGORY_L2, validate_extraction
 
 logger = logging.getLogger(__name__)
 
+# ── Module-level OpenAI client (created once at import time) ─────────────────
 
-# ── Prompt ───────────────────────────────────────────────────────────────────
-
-def _build_prompt() -> str:
-    """Build the extraction prompt dynamically from CATEGORY_L2 (single source of truth)."""
-    category_list = "\n".join(f'                        "{c}"' for c in CATEGORY_L2)
-    return f"""\
-Extract top-level use-of-proceeds items from the IPO prospectus section.
-Read ONLY from the bullet list. Skip Markdown table rows (lines starting with |).
-
-TOP-LEVEL items are bullets at the LEFTMOST margin — they start with "- Approximately"
-or "- approximately" with NO leading spaces. Lines that begin with spaces (indented)
-are sub-items that belong to their parent bullet; do NOT extract them separately.
-
-COMPLETENESS: Extract ALL top-level bullets. Do not stop early. A typical section
-has 2–8 top-level items. Two different items may share the same percentage value —
-extract each one separately.
-
-► extraction_text MUST be the COMPLETE bullet paragraph — include ALL sentences
-  of that bullet, not just the first sentence.
-  Stop at the next "- Approximately"/"- approximately" line at the left margin.
-
-► Skip any inline sub-enumerations "(i) X, (ii) Y" — do NOT extract them as
-  separate items.
-
-FOR EACH top-level item, produce a use_of_proceeds_item with attributes:
-  percentage        : numeric % string without sign, e.g. "35.0"
-                      Use "null" only if no percentage figure appears.
-  amount_hkd_million: HK$ millions string, e.g. "10893.0"
-                      Use "null" only if genuinely absent.
-  category          : short normalised label, choose best fit from:
-{category_list}
-  category_proposed : if no category fits well, put the raw label here and set
-                      category to the closest standard match above
-  category_raw      : verbatim use-description phrase from source
-  description       : 1–2 sentence summary, max 200 chars\
-"""
-
-
-_PROMPT = _build_prompt()
-
-
-# ── Few-shot example texts ────────────────────────────────────────────────────
-
-# ── Example 1 : CATL (2 top-level, no sub-items — clean baseline) ─────────
-_EX1_B1 = (
-    "Approximately 90% or HK$27,646.1 million will be used to advance the construction "
-    "of Phase I and II of our Hungary project. The designed annual production capacity of "
-    "Phase I and II is 34 GWh and 38 GWh respectively, totalling 72 GWh for EV batteries. "
-    "The total investment is expected to be no more than EUR7.3 billion."
-)
-_EX1_B2 = (
-    "Approximately 10% or HK$3,071.8 million will be used for working capital and other "
-    "general corporate purposes."
-)
-_EX1_TEXT = (
-    "We estimate that we will receive net proceeds of approximately HK$30,717.9 million. "
-    "We currently intend to apply these net proceeds for the following purposes:\n\n"
-    f"- {_EX1_B1}\n"
-    f"- {_EX1_B2}\n"
+_openai_client = openai.OpenAI(
+    api_key=config.OPENROUTER_API_KEY or "placeholder-not-set",
+    base_url=config.OPENROUTER_BASE_URL,
 )
 
-# ── Example 2 : Meituan (complete multi-sentence paragraphs + inline sub-items)
-# Key teaching points:
-#   (a) extraction_text = the FULL paragraph, not just the first sentence
-#   (b) inline (i)(ii)(iii) go into inline_sub_items attribute as "X; Y; Z"
-#   (c) different top-level items get different categories
-_EX2_B1 = (
-    "approximately 35% (approximately HK$10,893 million) to upgrade our technology "
-    "and enhance our research and development capabilities. Our efforts include hiring "
-    "computer programming experts, scientists and other talents, expanding our intellectual "
-    "property portfolio both domestically and internationally, and further investing in our "
-    "IT infrastructure and AI technologies. We intend to fund several major R&D projects "
-    "involving (i) data analytics, (ii) machine learning and (iii) driverless delivery "
-    "system. The results of these R&D projects will be applied in our products and services."
-)
-_EX2_B2 = (
-    "approximately 35% (approximately HK$10,893 million) to develop new services and "
-    "products. We intend to develop, among others, (i) merchant enabling systems and "
-    "technologies, which provide cloud-based ERP systems and smart payment solutions to "
-    "merchants; (ii) on-demand delivery of non-restaurant food; and "
-    "(iii) restaurant supply chain services, which provide raw material procurement and "
-    "logistics services to restaurants."
-)
-_EX2_B3 = (
-    "approximately 20% (approximately HK$6,225 million) to selectively pursue acquisitions "
-    "or investments in assets and businesses which are complementary to our business and "
-    "are in line with our strategies. We intend to continue to identify, invest in and "
-    "incubate promising companies that can expand the services we offer."
-)
-_EX2_B4 = (
-    "approximately 10% (approximately HK$3,112 million) for working capital and general "
-    "corporate purposes."
-)
-_EX2_TEXT = (
-    "We estimate that we will receive net proceeds of approximately HK$31,123 million. "
-    "We intend to use the net proceeds for the following purposes:\n\n"
-    f"- {_EX2_B1}\n"
-    f"- {_EX2_B2}\n"
-    f"- {_EX2_B3}\n"
-    f"- {_EX2_B4}\n"
-)
+# ── System prompt ─────────────────────────────────────────────────────────────
 
-# ── Example 3 : Indented sub-bullets with independent financial figures ───────
-# Key teaching point: (i)(ii)(iii) as SEPARATE indented lines → item_level="sub",
-# each with its own percentage and amount.
-_EX3_TOP1 = (
-    "Approximately 71.4%, or HK$1,526.9 million, is expected to be used to expand "
-    "our overall production capacity and upgrade our production lines, including new "
-    "plants, production lines, and equipment purchases."
-)
-_EX3_TOP2 = (
-    "Approximately 11.6%, or HK$248.4 million, is expected to be used for research "
-    "and development and product innovation to maintain our competitive advantage."
-)
-_EX3_TOP3 = (
-    "Approximately 8.1%, or HK$173.4 million, is expected to be used for working "
-    "capital and general corporate purposes."
-)
-_EX3_TEXT = (
-    "We estimate that we will receive net proceeds of approximately HK$2,141.0 million. "
-    "We intend to use the proceeds for the following purposes:\n\n"
-    f"- {_EX3_TOP1}\n"
-    f"- {_EX3_TOP2}\n"
-    f"- {_EX3_TOP3}\n"
+_CATEGORY_LIST = "\n".join(f'  - "{c}"' for c in CATEGORY_L2)
+
+_SYSTEM_PROMPT = (
+    "You are a financial data extraction assistant specialised in Hong Kong IPO prospectuses.\n"
+    "\n"
+    "## Task\n"
+    "Extract use-of-proceeds data from the provided prospectus section and return it as JSON.\n"
+    "\n"
+    "## Output format (JSON, no markdown fences)\n"
+    "{\n"
+    '  "total_net_proceeds_hkd_million": <number or null>,\n'
+    '  "uses": [\n'
+    "    {\n"
+    '      "category": "<one of the allowed categories or null>",\n'
+    '      "category_proposed": "<free-form label if no category fits, else null>",\n'
+    '      "category_raw": "<verbatim use-description phrase from source>",\n'
+    '      "percentage": <number or null>,\n'
+    '      "amount_hkd_million": <number or null>,\n'
+    '      "description": "<1-2 sentence summary, max 200 chars>",\n'
+    '      "source_text": "<complete paragraph from source for this use>"\n'
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "\n"
+    "## Rules for total_net_proceeds_hkd_million\n"
+    "- Use the BASE CASE only. Ignore over-allotment and conditional scenarios.\n"
+    "- If multiple figures appear, take the largest non-conditional number.\n"
+    "- Express in HK$ millions (e.g. HK$1,000 million -> 1000.0).\n"
+    "\n"
+    "## Rules for uses array\n"
+    "- Extract TOP-LEVEL bullets only. Do not extract sub-items (i)(ii)(iii) separately.\n"
+    "- source_text must be the COMPLETE paragraph for that bullet from the source.\n"
+    "- category must be EXACTLY one of:\n"
+    + _CATEGORY_LIST + "\n"
+    "- If no category fits, set category_proposed to the raw label and set category to\n"
+    "  the closest standard match above.\n"
+    "- Extract ALL top-level items. Do not stop early.\n"
+    "\n"
+    "## Example (FICTIONAL numbers -- format only)\n"
+    "Input text:\n"
+    "  We estimate net proceeds of approximately HK$5,000 million.\n"
+    "  - Approximately 60% or HK$3,000 million will be used for manufacturing expansion.\n"
+    "  - Approximately 40% or HK$2,000 million will be used for working capital.\n"
+    "\n"
+    "Expected output:\n"
+    "{\n"
+    '  "total_net_proceeds_hkd_million": 5000.0,\n'
+    '  "uses": [\n'
+    "    {\n"
+    '      "category": "Manufacturing expansion",\n'
+    '      "category_proposed": null,\n'
+    '      "category_raw": "manufacturing expansion",\n'
+    '      "percentage": 60.0,\n'
+    '      "amount_hkd_million": 3000.0,\n'
+    '      "description": "Expand manufacturing capacity.",\n'
+    '      "source_text": "Approximately 60% or HK$3,000 million will be used for manufacturing expansion."\n'  # noqa: E501
+    "    },\n"
+    "    {\n"
+    '      "category": "Working capital",\n'
+    '      "category_proposed": null,\n'
+    '      "category_raw": "working capital",\n'
+    '      "percentage": 40.0,\n'
+    '      "amount_hkd_million": 2000.0,\n'
+    '      "description": "General working capital and corporate purposes.",\n'
+    '      "source_text": "Approximately 40% or HK$2,000 million will be used for working capital."\n'  # noqa: E501
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "\n"
+    "The example uses FICTIONAL numbers to show format only. "
+    "Do NOT copy example numbers into your output.\n"
 )
 
 
-def _build_examples() -> list[lx.data.ExampleData]:  # noqa: E501
-    return [
-        # ── Example 1 : CATL, no sub-items ───────────────────────────────────
-        lx.data.ExampleData(
-            text=_EX1_TEXT,
-            extractions=[
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX1_B1,
-                    attributes={
-                        "percentage": "90.0",
-                        "amount_hkd_million": "27646.1",
-                        "category": "Manufacturing expansion",
-                        "category_raw": (
-                            "advance the construction of Phase I and II of our Hungary project"
-                        ),
-                        "description": (
-                            "Build EV battery factory in Hungary with 72 GWh total capacity"
-                            " (Phase I 34 GWh + Phase II 38 GWh)."
-                        ),
-                    },
-                ),
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX1_B2,
-                    attributes={
-                        "percentage": "10.0",
-                        "amount_hkd_million": "3071.8",
-                        "category": "Working capital",
-                        "category_raw": "working capital and other general corporate purposes",
-                        "description": "General working capital and corporate purposes.",
-                    },
-                ),
-            ],
-        ),
-        # ── Example 2 : Meituan, full paragraphs + inline_sub_items ──────────
-        lx.data.ExampleData(
-            text=_EX2_TEXT,
-            extractions=[
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX2_B1,
-                    attributes={
-                        "percentage": "35.0",
-                        "amount_hkd_million": "10893.0",
-                        "category": "R&D and technology",
-                        "category_raw": (
-                            "upgrade our technology and enhance our research"
-                            " and development capabilities"
-                        ),
-                        "description": (
-                            "Hire experts, expand IP portfolio, invest in IT and AI;"
-                            " fund R&D in data analytics, ML, and driverless delivery."
-                        ),
-                    },
-                ),
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX2_B2,
-                    attributes={
-                        "percentage": "35.0",
-                        "amount_hkd_million": "10893.0",
-                        "category": "Product development",
-                        "category_raw": "develop new services and products",
-                        "description": (
-                            "Develop merchant enabling systems, on-demand food delivery,"
-                            " and restaurant supply chain services."
-                        ),
-                    },
-                ),
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX2_B3,
-                    attributes={
-                        "percentage": "20.0",
-                        "amount_hkd_million": "6225.0",
-                        "category": "Acquisitions and investments",
-                        "category_raw": (
-                            "selectively pursue acquisitions or investments"
-                            " in assets and businesses"
-                        ),
-                        "description": (
-                            "Identify, invest in, and incubate complementary companies"
-                            " aligned with business strategies."
-                        ),
-                    },
-                ),
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX2_B4,
-                    attributes={
-                        "percentage": "10.0",
-                        "amount_hkd_million": "3112.0",
-                        "category": "Working capital",
-                        "category_raw": "working capital and general corporate purposes",
-                        "description": "General working capital and corporate purposes.",
-                    },
-                ),
-            ],
-        ),
-        # ── Example 3 : Indented sub-bullets with independent financials ──────
-        lx.data.ExampleData(
-            text=_EX3_TEXT,
-            extractions=[
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX3_TOP1,
-                    attributes={
-                        "percentage": "71.4",
-                        "amount_hkd_million": "1526.9",
-                        "category": "Production capacity",
-                        "category_raw": (
-                            "expand our overall production capacity"
-                            " and upgrade our production lines"
-                        ),
-                        "description": (
-                            "Build/expand plants, install production lines, and purchase equipment"
-                            " across multiple countries."
-                        ),
-                    },
-                ),
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX3_TOP2,
-                    attributes={
-                        "percentage": "11.6",
-                        "amount_hkd_million": "248.4",
-                        "category": "R&D and technology",
-                        "category_raw": "research and development and product innovation",
-                        "description": (
-                            "Develop new products, expand R&D team, and conduct product testing."
-                        ),
-                    },
-                ),
-                lx.data.Extraction(
-                    extraction_class="use_of_proceeds_item",
-                    extraction_text=_EX3_TOP3,
-                    attributes={
-                        "percentage": "8.1",
-                        "amount_hkd_million": "173.4",
-                        "category": "Working capital",
-                        "category_raw": "working capital and general corporate purposes",
-                        "description": "General working capital and corporate purposes.",
-                    },
-                ),
-            ],
-        ),
-    ]
+# ── User prompt builder ───────────────────────────────────────────────────────
+
+def _build_user_prompt(text: str) -> str:
+    return f"Extract use-of-proceeds data from this HK IPO prospectus section:\n\n---\n{text}\n---"
 
 
-# Module-level constant: built once at import time.
-# Thread-safe because it is immutable after module load — no shared mutable state.
-# All worker threads in ThreadPoolExecutor read from this same object without racing.
-_EXAMPLES = _build_examples()
+# ── LLM call helpers ──────────────────────────────────────────────────────────
 
-
-# ── Model config ──────────────────────────────────────────────────────────────
-
-def _build_model_config() -> ModelConfig:
-    return ModelConfig(
-        model_id=config.L2_TEXT_MODEL,
-        provider="openai",
-        provider_kwargs={
-            "api_key": config.OPENROUTER_API_KEY,
-            "base_url": config.OPENROUTER_BASE_URL,
-            "default_headers": {
-                "HTTP-Referer": "https://github.com/hk-ipo-research",
-                "X-Title": "HK IPO Research",
-            },
-        },
+def _call_llm(text: str) -> dict[str, Any]:
+    response = _openai_client.chat.completions.create(
+        model=config.L2_TEXT_MODEL,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": _build_user_prompt(text)},
+        ],
+        temperature=0.0,
+        max_tokens=8192,
+        response_format={"type": "json_object"},
     )
+    raw = response.choices[0].message.content or ""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Fallback: extract first JSON object from the response
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        raise ValueError(f"LLM response is not valid JSON: {raw[:200]!r}")
+
+
+def _call_llm_with_prompt(user_content: str) -> dict[str, Any]:
+    """Same as _call_llm but takes arbitrary user content (for correction retry)."""
+    response = _openai_client.chat.completions.create(
+        model=config.L2_TEXT_MODEL,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.0,
+        max_tokens=8192,
+        response_format={"type": "json_object"},
+    )
+    raw = response.choices[0].message.content or ""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        raise ValueError(f"LLM response is not valid JSON: {raw[:200]!r}")
 
 
 # ── Text cleaning ─────────────────────────────────────────────────────────────
 
 _TABLE_LINE_RE = re.compile(r"^\s*\|")
 _PAGE_MARKER_RE = re.compile(r"^[\s–—-]*\d{1,4}[\s–—-]*$")
-# Matches the leading "  - " (2+ spaces then dash+space) of an indented sub-bullet.
-# We neutralise these by removing the dash so the LLM cannot confuse them with
-# top-level bullets.
 _INDENTED_BULLET_RE = re.compile(r"^(\s{2,})-\s", re.MULTILINE)
 
 
@@ -365,97 +185,71 @@ def _clean_section_text(text: str) -> str:
             continue
         cleaned.append(line)
     result = "\n".join(cleaned)
-    # Neutralise indented sub-bullet dashes: "   - " → "     "
+    # Neutralise indented sub-bullet dashes: "   - " -> "     "
     result = _INDENTED_BULLET_RE.sub(r"\1  ", result)
     return re.sub(r"\n{3,}", "\n\n", result).strip()
 
 
-# ── Total proceeds extraction ─────────────────────────────────────────────────
+# ── Result helpers ────────────────────────────────────────────────────────────
 
-_PROCEEDS_RE = re.compile(
-    r"net\s+proceeds[^.]{0,200}?(?:approximately\s+)?HK\$([\d,]+(?:\.\d+)?)\s*million",
-    re.IGNORECASE | re.DOTALL,
-)
-
-
-def _extract_total_proceeds(text: str) -> tuple[float | None, str, list[float]]:
-    """Extract the total net proceeds figure from the section text.
-
-    Finds ALL candidate proceeds figures and takes the LAST match.
-    Rationale: prospectuses typically restate the net proceeds figure
-    near the bullet list, and the last mention is the most specific
-    (the opening sentence often gives an approximate figure, while the
-    sentence immediately before the bullet list gives the precise figure).
-
-    Returns
-    -------
-    (value, currency, candidates)
-        value:      The last (most specific) proceeds figure, or None.
-        currency:   Always "HKD".
-        candidates: All distinct proceeds values found (empty if none).
-                    Useful for L3 inspection when multiple figures appear.
-    """
-    matches = list(_PROCEEDS_RE.finditer(text))
-    if not matches:
-        return None, "HKD", []
-    candidates = [float(m.group(1).replace(",", "")) for m in matches]
-    # Take the LAST match — most specific restatement in the text.
-    return candidates[-1], "HKD", candidates
+def _safe_float_or_none(val: Any) -> float | None:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if s.lower() in ("null", "", "none", "n/a"):
+        return None
+    try:
+        return float(s.replace(",", "").replace("%", ""))
+    except (ValueError, TypeError):
+        return None
 
 
-# ── Source text completion ────────────────────────────────────────────────────
+def _parse_llm_output(data: dict[str, Any], company_file: str = "") -> list[dict[str, Any]]:
+    uses: list[dict[str, Any]] = []
+    for i, item in enumerate(data.get("uses", []), start=1):
+        pct = _safe_float_or_none(item.get("percentage"))
+        amt = _safe_float_or_none(item.get("amount_hkd_million"))
+        if pct is None and amt is None:
+            continue
+        uses.append({
+            "use_id": f"use_{i:03d}",
+            "parent_id": None,
+            "category": item.get("category") or None,
+            "category_proposed": item.get("category_proposed") or None,
+            "category_raw": str(item.get("category_raw") or ""),
+            "amount_hkd_million": amt,
+            "percentage": pct,
+            "description": str(item.get("description") or ""),
+            "source_text": str(item.get("source_text") or ""),
+        })
+    return uses
 
-_NEXT_TOP_BULLET_RE = re.compile(
-    r"\n- (?:Approximately|approximately)\s", re.IGNORECASE
-)
-_MD_HEADING_RE = re.compile(r"\n#{1,4}\s+|\n\*\*[A-Z]")
 
-
-def _extend_source_text(
-    extraction_text: str,
-    full_text: str,
-    use_id: str = "",
-    company_file: str = "",
-) -> str:
-    """Extend a (possibly truncated) extraction_text to the full bullet paragraph.
-
-    Finds the extraction_text in full_text, then extends rightward to the
-    next top-level bullet start, the next Markdown heading, or end of text.
-
-    Parameters
-    ----------
-    extraction_text: The (possibly truncated) text from the LLM extraction.
-    full_text:       The full cleaned section text to search within.
-    use_id:          Optional use_id for diagnostic logging.
-    company_file:    Optional company file name for diagnostic logging.
-    """
-    if not extraction_text:
-        return extraction_text
-    anchor = extraction_text[:60].strip()
-    pos = full_text.find(anchor)
-    if pos == -1:
-        logger.warning(
-            "[WARN] _extend_source_text: anchor not found for use_id=%s in %s",
-            use_id,
-            company_file,
-        )
-        return extraction_text  # can't locate; keep as-is
-
-    search_start = pos + len(anchor)
-    # Find the nearest boundary: next top-level bullet OR next Markdown heading
-    candidates: list[int] = []
-    m_bullet = _NEXT_TOP_BULLET_RE.search(full_text, search_start)
-    if m_bullet:
-        candidates.append(m_bullet.start())
-    m_heading = _MD_HEADING_RE.search(full_text, search_start)
-    if m_heading:
-        candidates.append(m_heading.start())
-    end = min(candidates) if candidates else len(full_text)
-
-    full_para = full_text[pos:end].strip()
-    # Strip trailing page markers like "– 394 –"
-    full_para = re.sub(r"\s*[–—-]{1,3}\s*\d+\s*[–—-]{1,3}\s*$", "", full_para).strip()
-    return full_para or extraction_text
+def _build_result(
+    company_file: str,
+    hk_ticker: str | None,
+    document_date: str | None,
+    total: float | None,
+    uses: list[dict[str, Any]],
+) -> dict[str, Any]:
+    top_uses = [u for u in uses if u["parent_id"] is None]
+    pct_sum = round(sum(u["percentage"] or 0 for u in top_uses), 1)
+    return {
+        "company_file": company_file,
+        "section_source": Path(company_file).stem + ".json",
+        "hk_ticker": hk_ticker,
+        "document_date": document_date,
+        "model_used": config.L2_TEXT_MODEL,
+        "extraction_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "total_net_proceeds_hkd_million": total,
+        "currency": "HKD",
+        "uses": uses,
+        "validation_preview": {
+            "percentage_sum": pct_sum,
+            "top_level_count": len(top_uses),
+            "total_items_count": len(uses),
+        },
+    }
 
 
 # ── Retry wrapper ─────────────────────────────────────────────────────────────
@@ -491,134 +285,78 @@ def _run_with_retry(fn: Any, max_retries: int = 5) -> Any:
                 wait = retry_after if retry_after is not None else 2 ** attempt
                 print(
                     f"  [RETRY] 429 RateLimitError, attempt {attempt + 1}. "
-                    f"Waiting {wait}s…"
+                    f"Waiting {wait}s..."
                 )
                 time.sleep(wait)
         except _RETRYABLE as exc:
             last_exc = exc
             if attempt < max_retries - 1:
                 wait = 2 ** attempt
-                print(f"  [RETRY] attempt {attempt + 1} failed ({exc!r}). Waiting {wait}s…")
+                print(f"  [RETRY] attempt {attempt + 1} failed ({exc!r}). Waiting {wait}s...")
                 time.sleep(wait)
         # Programming errors (ValueError, AttributeError, etc.) propagate immediately.
     raise last_exc  # type: ignore[misc]
-
-
-# ── Result parsing ────────────────────────────────────────────────────────────
-
-def _safe_float_or_none(val: Any) -> float | None:
-    if val is None:
-        return None
-    s = str(val).strip()
-    if s.lower() in ("null", "", "none", "n/a"):
-        return None
-    try:
-        return float(s.replace(",", "").replace("%", ""))
-    except (ValueError, TypeError):
-        return None
-
-
-def _parse_extractions(
-    doc: lx.data.AnnotatedDocument,
-    full_text: str,
-    company_file: str = "",
-) -> list[dict[str, Any]]:
-    """Convert langextract output to top-level uses list.
-
-    - Only top-level items (with at least one financial figure) are kept.
-    - source_text is extended to the full bullet paragraph.
-    """
-    uses: list[dict[str, Any]] = []
-
-    for ext in doc.extractions:
-        if ext.extraction_class != "use_of_proceeds_item":
-            continue
-        attrs = ext.attributes or {}
-
-        # Drop items with neither percentage nor amount (spurious extractions).
-        if _safe_float_or_none(attrs.get("percentage")) is None and \
-                _safe_float_or_none(attrs.get("amount_hkd_million")) is None:
-            continue
-
-        use_id = f"use_{len(uses) + 1:03d}"
-        source_text = _extend_source_text(
-            ext.extraction_text or "", full_text, use_id=use_id, company_file=company_file
-        )
-
-        uses.append(
-            {
-                "use_id": use_id,
-                "parent_id": None,
-                "category": attrs.get("category", ""),
-                "category_proposed": attrs.get("category_proposed") or None,
-                "category_raw": attrs.get("category_raw", ""),
-                "amount_hkd_million": _safe_float_or_none(attrs.get("amount_hkd_million")),
-                "percentage": _safe_float_or_none(attrs.get("percentage")),
-                "description": attrs.get("description", ""),
-                "source_text": source_text,
-            }
-        )
-
-    return uses
 
 
 # ── Core extraction ───────────────────────────────────────────────────────────
 
 def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
     """Run LLM extraction on an L1 section dict; return the L2 output dict."""
+    from hk_ipo.l3_validation import validate_record  # lazy to avoid circular import
+
     text = _clean_section_text(section_data["text"])
-    total_proceeds, currency, proceeds_candidates = _extract_total_proceeds(text)
+    company_file = section_data.get("company_file", "")
+    hk_ticker = section_data.get("hk_ticker")
+    document_date = section_data.get("document_date")
 
-    # Metadata populated by L1; warn once if keys are absent (stale L1 output)
-    hk_ticker: str | None = section_data.get("hk_ticker")
-    document_date: str | None = section_data.get("document_date")
     if hk_ticker is None and document_date is None:
-        print("  [WARN] hk_ticker/document_date missing — re-run L1 to populate")
+        print("  [WARN] hk_ticker/document_date missing -- re-run L1 to populate")
 
-    doc: lx.data.AnnotatedDocument = _run_with_retry(
-        lambda: lx.extract(
-            text_or_documents=text,
-            prompt_description=_PROMPT,
-            examples=_EXAMPLES,
-            config=_build_model_config(),
-        )
-    )
+    # First LLM call
+    raw = _run_with_retry(lambda: _call_llm(text))
+    uses = _parse_llm_output(raw, company_file)
+    total = _safe_float_or_none(raw.get("total_net_proceeds_hkd_million"))
+    result = _build_result(company_file, hk_ticker, document_date, total, uses)
 
-    uses = _parse_extractions(doc, text, company_file=section_data.get("company_file", ""))
-
-    top_uses = [u for u in uses if u["parent_id"] is None]
-    pct_sum = round(sum(u["percentage"] or 0 for u in top_uses), 1)
-
-    # Record all distinct candidate proceeds values for L3 inspection.
-    distinct_candidates = sorted(set(proceeds_candidates))
-    result: dict[str, Any] = {
-        "company_file": section_data["company_file"],
-        "section_source": Path(section_data["company_file"]).stem + ".json",
-        "hk_ticker": hk_ticker,
-        "document_date": document_date,
-        "model_used": config.L2_TEXT_MODEL,
-        "extraction_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
-        "total_net_proceeds_hkd_million": total_proceeds,
-        "currency": currency,
-        "uses": uses,
-        "validation_preview": {
-            "percentage_sum": pct_sum,
-            "top_level_count": len(top_uses),
-            "total_items_count": len(uses),
-        },
-    }
-    if len(distinct_candidates) > 1:
-        result["proceeds_candidates"] = distinct_candidates
-
-    # Schema validation — log WARNING on failure but do not crash.
+    # Schema validation (log warning but don't crash)
     try:
         validate_extraction(result)
     except ValidationError as exc:
-        logger.warning(
-            "[WARN] Schema validation failed for %s: %s",
-            section_data.get("company_file", "?"),
-            exc,
+        logger.warning("[WARN] Schema validation failed for %s: %s", company_file, exc)
+
+    # Self-correction: run L3 checks; retry once if failed
+    passed, errors, _ = validate_record(result)
+    if not passed:
+        correction_user = (
+            _build_user_prompt(text)
+            + "\n\nCORRECTION NEEDED -- your previous extraction had these validation errors:\n"
+            + "\n".join(f"- {e}" for e in errors)
+            + "\n\nPlease re-extract the data, fixing the issues above."
         )
+        try:
+            raw2 = _run_with_retry(lambda: _call_llm_with_prompt(correction_user))
+            uses2 = _parse_llm_output(raw2, company_file)
+            total2 = _safe_float_or_none(raw2.get("total_net_proceeds_hkd_million"))
+            result = _build_result(company_file, hk_ticker, document_date, total2, uses2)
+            try:
+                validate_extraction(result)
+            except ValidationError as exc:
+                logger.warning(
+                    "[WARN] Schema validation failed after correction for %s: %s",
+                    company_file,
+                    exc,
+                )
+            passed2, errors2, _ = validate_record(result)
+            if not passed2:
+                logger.warning(
+                    "[WARN] Self-correction still failed for %s; marking needs_human_review",
+                    company_file,
+                )
+                result["needs_human_review"] = True
+                result["review_errors"] = errors2
+        except Exception as exc:
+            logger.warning("[WARN] Self-correction call failed for %s: %s", company_file, exc)
+            result["needs_human_review"] = True
 
     return result
 
@@ -650,7 +388,7 @@ def process_single(
 
     section_data = json.loads(section_file.read_text(encoding="utf-8"))
 
-    print(f"\n→ {section_file.name}")
+    print(f"\n-> {section_file.name}")
     try:
         result = extract_section(section_data)
     except Exception as exc:
@@ -660,9 +398,11 @@ def process_single(
             "section_file": str(section_file),
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         }
-        err_path.write_text(json.dumps(err_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        err_path.write_text(
+            json.dumps(err_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         print(f"  [ERROR] {exc}")
-        print(f"  → error written to: {err_path.name}")
+        print(f"  -> error written to: {err_path.name}")
         raise
 
     out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -671,7 +411,7 @@ def process_single(
     print(f"  total items : {vp['total_items_count']} (incl. sub-items)")
     print(f"  pct sum     : {vp['percentage_sum']}%")
     print(f"  total HK$M  : {result['total_net_proceeds_hkd_million']}")
-    print(f"  → saved to  : {out_path.name}")
+    print(f"  -> saved to  : {out_path.name}")
     return result
 
 
@@ -712,7 +452,7 @@ def process_all(
             buf.write(f"[SKIP] already done: {out_path.name}\n")
             return jf.name, True, buf.getvalue()
 
-        buf.write(f"\n→ {jf.name}\n")
+        buf.write(f"\n-> {jf.name}\n")
         try:
             section_data = json.loads(jf.read_text(encoding="utf-8"))
             result = extract_section(section_data)
@@ -725,7 +465,7 @@ def process_all(
             buf.write(f"  total items : {vp['total_items_count']} (incl. sub-items)\n")
             buf.write(f"  pct sum     : {vp['percentage_sum']}%\n")
             buf.write(f"  total HK$M  : {result['total_net_proceeds_hkd_million']}\n")
-            buf.write(f"  → saved to  : {out_path.name}\n")
+            buf.write(f"  -> saved to  : {out_path.name}\n")
             return jf.name, True, buf.getvalue()
         except Exception as exc:
             buf.write(f"  [ERROR] {exc}\n")
@@ -755,7 +495,7 @@ def process_all(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="L2: structure Use of Proceeds via LLM (langextract + OpenRouter)"
+        description="L2: structure Use of Proceeds via LLM (direct OpenAI SDK + OpenRouter)"
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--single", metavar="FILENAME",

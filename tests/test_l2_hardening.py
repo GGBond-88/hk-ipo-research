@@ -1,24 +1,22 @@
-"""Tests for L2 pipeline hardening (Prompt 2).
+"""Tests for L2 pipeline hardening.
 
 Coverage:
-  - 429 retry: mock openai.RateLimitError with Retry-After header → sleep called with that value
+  - 429 retry: mock openai.RateLimitError with Retry-After header -> sleep called with that value
   - Skip logic: if output file exists and force=False, process_single skips
-  - Anchor-failure warning: _extend_source_text logs WARNING when anchor not found
-  - _extract_total_proceeds returns last match when multiple figures present
-  - process_all returns correct summary dict shape
+  - extract_section: correct structure, drops items without financials
+  - Self-correction loop: retries once on L3 failure, marks needs_human_review on double failure
+  - process_single no API call when output file already exists
 """
 
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from hk_ipo.l2_extraction import (
-    _extend_source_text,
-    _extract_total_proceeds,
     _run_with_retry,
+    extract_section,
     process_all,
     process_single,
 )
@@ -141,7 +139,7 @@ class TestRateLimitRetry:
             result = _run_with_retry(flaky_fn, max_retries=3)
 
         assert result == "ok"
-        # Backoff for attempt 0 → sleep(1) [2^0 = 1]
+        # Backoff for attempt 0 -> sleep(1) [2^0 = 1]
         mock_sleep.assert_called_once_with(1)
 
     def test_max_retries_is_5_by_default(self):
@@ -206,7 +204,7 @@ class TestSkipLogic:
         assert result["total_net_proceeds_hkd_million"] == 999.0
 
     def test_process_all_skips_existing_and_returns_summary(self, tmp_path: Path):
-        """process_all with existing output file → skipped count > 0, no API call."""
+        """process_all with existing output file -> skipped count > 0, no API call."""
         sections_dir = tmp_path / "sections"
         extracted_dir = tmp_path / "extracted"
         sections_dir.mkdir()
@@ -227,109 +225,117 @@ class TestSkipLogic:
         assert "skipped" in summary
 
 
-# ── Test: anchor failure warning ──────────────────────────────────────────────
+# ── Test: extract_section ─────────────────────────────────────────────────────
 
-class TestAnchorFailureWarning:
-    def test_extend_source_text_warns_when_anchor_not_found(self, caplog):
-        """When anchor text can't be found, a WARNING is logged."""
-        text = "This text does not contain the extraction."
-        extraction = "Some totally different text that is not in the document."
+class TestExtractSection:
+    """Tests for the new direct-LLM extract_section."""
 
-        with caplog.at_level(logging.WARNING, logger="hk_ipo.l2_extraction"):
-            result = _extend_source_text(
-                extraction, text, use_id="use_001", company_file="test.pdf"
-            )
+    def _llm_ok(self) -> dict:
+        """A valid LLM response that will pass L3."""
+        return {
+            "total_net_proceeds_hkd_million": 1000.0,
+            "uses": [
+                {
+                    "category": "Working capital",
+                    "category_proposed": None,
+                    "category_raw": "working capital and general corporate purposes",
+                    "percentage": 100.0,
+                    "amount_hkd_million": 1000.0,
+                    "description": "General working capital.",
+                    "source_text": "Approximately 100% or HK$1,000 million for working capital.",
+                }
+            ],
+        }
 
-        # Should return the original extraction_text unchanged
-        assert result == extraction
-        # Should have logged a WARNING
-        assert any(
-            "anchor not found" in record.message
-            for record in caplog.records
-            if record.levelno == logging.WARNING
-        )
+    def _llm_bad(self) -> dict:
+        """An LLM response that fails L3 (pct sum != 100)."""
+        return {
+            "total_net_proceeds_hkd_million": 1000.0,
+            "uses": [
+                {
+                    "category": "Working capital",
+                    "category_proposed": None,
+                    "category_raw": "working capital",
+                    "percentage": 50.0,
+                    "amount_hkd_million": 500.0,
+                    "description": "Only half.",
+                    "source_text": "Approximately 50% for working capital.",
+                }
+            ],
+        }
 
-    def test_extend_source_text_no_warning_when_found(self, caplog):
-        """When anchor IS found, no warning is logged."""
-        extraction = "Approximately 35% will be used for R&D."
-        text = f"Intro text.\n\n- {extraction}\n- Next bullet."
+    def _section(self) -> dict:
+        return {
+            "company_file": "test.pdf",
+            "hk_ticker": "1234",
+            "document_date": "2024-01-01",
+            "section_title": "USE OF PROCEEDS",
+            "start_page": 1,
+            "end_page": 2,
+            "text": (
+                "We estimate net proceeds of approximately HK$1,000 million.\n\n"
+                "- Approximately 100% or HK$1,000 million for working capital "
+                "and general corporate purposes.\n"
+            ),
+            "tables": [],
+            "extraction_method": "toc",
+        }
 
-        with caplog.at_level(logging.WARNING, logger="hk_ipo.l2_extraction"):
-            _extend_source_text(
-                extraction, text, use_id="use_001", company_file="test.pdf"
-            )
+    def test_returns_correct_structure(self):
+        with patch("hk_ipo.l2_extraction._call_llm", return_value=self._llm_ok()):
+            result = extract_section(self._section())
+        assert result["total_net_proceeds_hkd_million"] == 1000.0
+        assert len(result["uses"]) == 1
+        assert result["uses"][0]["use_id"] == "use_001"
+        assert "validation_preview" in result
 
-        anchor_warns = [
-            r for r in caplog.records
-            if r.levelno == logging.WARNING and "anchor not found" in r.message
-        ]
-        assert anchor_warns == []
+    def test_drops_items_with_no_financials(self):
+        response = {
+            "total_net_proceeds_hkd_million": 1000.0,
+            "uses": [
+                {"category": "Working capital", "category_raw": "wc",
+                 "percentage": None, "amount_hkd_million": None,
+                 "description": "empty", "source_text": "..."},
+                {"category": "Working capital", "category_raw": "wc",
+                 "percentage": 100.0, "amount_hkd_million": 1000.0,
+                 "description": "real", "source_text": "Approximately 100%..."},
+            ],
+        }
+        with patch("hk_ipo.l2_extraction._call_llm", return_value=response):
+            result = extract_section(self._section())
+        assert len(result["uses"]) == 1
 
-    def test_extend_source_text_includes_use_id_in_warning(self, caplog):
-        """Warning message includes the use_id for easy debugging."""
-        text = "Something completely different."
-        extraction = "Anchor that will not be found."
+    def test_self_correction_retries_on_l3_failure(self):
+        """First call fails L3; second call (correction) succeeds -- two LLM calls total."""
+        call_count = 0
 
-        with caplog.at_level(logging.WARNING, logger="hk_ipo.l2_extraction"):
-            _extend_source_text(extraction, text, use_id="use_042", company_file="x.pdf")
+        def fake_call_llm(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            return self._llm_bad() if call_count == 1 else self._llm_ok()
 
-        assert any(
-            "use_042" in record.message
-            for record in caplog.records
-            if record.levelno == logging.WARNING
-        )
+        with patch("hk_ipo.l2_extraction._call_llm", side_effect=fake_call_llm), \
+             patch("hk_ipo.l2_extraction._call_llm_with_prompt", side_effect=fake_call_llm):
+            result = extract_section(self._section())
 
+        assert call_count == 2
+        assert result.get("needs_human_review") is not True
 
-# ── Test: _extract_total_proceeds returns last match ─────────────────────────
+    def test_marks_needs_human_review_when_both_calls_fail(self):
+        """Both calls fail L3 -> needs_human_review=True."""
+        with patch("hk_ipo.l2_extraction._call_llm", return_value=self._llm_bad()), \
+             patch("hk_ipo.l2_extraction._call_llm_with_prompt", return_value=self._llm_bad()):
+            result = extract_section(self._section())
+        assert result.get("needs_human_review") is True
 
-class TestExtractTotalProceeds:
-    def test_returns_last_match_when_multiple_figures(self):
-        """When multiple HK$ figures appear, the LAST one is returned."""
-        text = (
-            "We expect net proceeds of approximately HK$500.0 million. "
-            "After deducting fees, net proceeds of approximately HK$480.0 million "
-            "will be received. "
-            "The net proceeds are HK$450.0 million."
-        )
-        value, currency, candidates = _extract_total_proceeds(text)
-        # Last match should be 450.0
-        assert value == 450.0
-        assert currency == "HKD"
-        assert len(candidates) == 3
-
-    def test_returns_none_when_no_match(self):
-        """When no proceeds figure is found, returns (None, 'HKD', [])."""
-        text = "This section discusses general corporate matters."
-        value, currency, candidates = _extract_total_proceeds(text)
-        assert value is None
-        assert currency == "HKD"
-        assert candidates == []
-
-    def test_returns_single_match_directly(self):
-        """With exactly one match, candidates has one entry and value == candidates[0]."""
-        text = (
-            "We estimate that we will receive net proceeds of approximately "
-            "HK$31,123.0 million."
-        )
-        value, currency, candidates = _extract_total_proceeds(text)
-        assert value == 31123.0
-        assert candidates == [31123.0]
-
-    def test_candidates_captures_all_distinct_values(self):
-        """All found values appear in candidates (may include duplicates if repeated)."""
-        text = (
-            "Net proceeds of approximately HK$1000.0 million. "
-            "Net proceeds of approximately HK$2000.0 million. "
-            "Net proceeds of approximately HK$3000.0 million."
-        )
-        value, _, candidates = _extract_total_proceeds(text)
-        assert value == 3000.0
-        assert 1000.0 in candidates
-        assert 2000.0 in candidates
-        assert 3000.0 in candidates
-
-    def test_returns_tuple_of_three(self):
-        """Return value is a 3-tuple (value, currency, candidates)."""
-        text = "Net proceeds of approximately HK$100.0 million."
-        result = _extract_total_proceeds(text)
-        assert len(result) == 3
+    def test_no_api_call_when_skipped(self, tmp_path):
+        """process_single skips existing output without calling LLM."""
+        sections_dir = tmp_path / "sections"
+        extracted_dir = tmp_path / "extracted"
+        sections_dir.mkdir()
+        extracted_dir.mkdir()
+        section_file = _make_section_json(sections_dir)
+        _make_extracted_json(extracted_dir)
+        with patch("hk_ipo.l2_extraction._call_llm") as mock_llm:
+            process_single(section_file, extracted_dir, force=False)
+        mock_llm.assert_not_called()
