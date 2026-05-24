@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    {"name": "Beta Technology Ltd"},
+    {"name": "Growth"},
+    {"name": "Financing"},
+    {"name": "Working Capital"},
+    {"name": "R&D"},
+    {"name": "Debt Repayment"},
+    {"name": "Operations"}
+  ],
+  "links": [
+    {"source": "Beta Technology Ltd", "target": "Growth", "value": 150},
+    {"source": "Beta Technology Ltd", "target": "Financing", "value": 90},
+    {"source": "Beta Technology Ltd", "target": "Working Capital", "value": 60},
+    {"source": "Growth", "target": "R&D", "value": 150},
+    {"source": "Financing", "target": "Debt Repayment", "value": 90},
+    {"source": "Working Capital", "target": "Operations", "value": 60}
+  ],
+  "total_net_proceeds": 300
+}

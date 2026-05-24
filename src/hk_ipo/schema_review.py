@@ -14,6 +14,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from hk_ipo.logging_setup import get_logger
+
+logger = get_logger(__name__)
+
 
 def _normalise(s: str) -> str:
     """Lowercase and strip whitespace for comparison."""
@@ -26,8 +30,9 @@ def _group_by_similarity(
 ) -> list[list[str]]:
     """Group similar strings into clusters using SequenceMatcher.
 
-    Simple O(n²) grouping: each string is assigned to the first existing
-    cluster whose representative is sufficiently similar; otherwise a new
+    Simple O(n^2) grouping: each string is assigned to the first existing
+    cluster whose representative is sufficiently similar
+    otherwise a new
     cluster is created. No external ML dependencies.
 
     Parameters
@@ -60,7 +65,7 @@ def _scan_dir(extracted_dir: Path) -> dict[str, Any]:
     Returns a summary dict with:
         files_scanned, total_uses, uses_with_proposed,
         proposed_values: list[str],
-        proposed_by_file: dict[str, list[str]]   (filename → list of proposed values)
+        proposed_by_file: dict[str, list[str]]   (filename -> list of proposed values)
     """
     jsons = sorted(
         p
@@ -75,7 +80,7 @@ def _scan_dir(extracted_dir: Path) -> dict[str, Any]:
     for jf in jsons:
         try:
             data = json.loads(jf.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, OSError):
             continue
 
         uses = data.get("uses", [])
@@ -119,7 +124,7 @@ def generate_report(extracted_dir: Path) -> str:
         lines.append("=" * 70)
         return "\n".join(lines)
 
-    # Build a map: value → list of files it appears in
+    # Build a map: value -> list of files it appears in
     value_to_files: dict[str, list[str]] = {}
     for filename, vals in proposed_by_file.items():
         for v in vals:
@@ -158,9 +163,7 @@ def generate_report(extracted_dir: Path) -> str:
         lines.append("")
 
     lines.append("=" * 70)
-    lines.append(
-        "NOTE: This report is read-only. Edit schema.py manually to add new categories."
-    )
+    lines.append("NOTE: This report is read-only. Edit schema.py manually to add new categories.")
     lines.append("=" * 70)
 
     return "\n".join(lines)
@@ -182,15 +185,16 @@ def main() -> None:
         extracted_dir = Path(args.extracted_dir)
     else:
         from hk_ipo.config import EXTRACTED_DIR
+
         extracted_dir = EXTRACTED_DIR
 
     if not extracted_dir.exists():
-        print(f"[WARN] Directory does not exist: {extracted_dir}")
-        print("No files to scan.")
+        logger.warning("Directory does not exist: %s", extracted_dir)
+        logger.info("No files to scan.")
         return
 
     report = generate_report(extracted_dir)
-    print(report)
+    print(report)  # intentional stdout
 
 
 if __name__ == "__main__":

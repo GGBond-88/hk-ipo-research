@@ -13,15 +13,65 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
+from hk_ipo.logging_setup import get_logger
+
+logger = get_logger(__name__)
+
 import pdfplumber
 import pymupdf
 import pymupdf4llm
+from langdetect import DetectorFactory, LangDetectException, detect_langs
+
+DetectorFactory.seed = 0  # deterministic
+
+# ── 文件名 Ticker 提取 ────────────────────────────────────────────────────────
+_FILENAME_TICKER_RE = re.compile(r"^(\d{4,5})$")
+
+
+def ticker_from_filename(path: str) -> str | None:
+    """Return zero-padded 5-digit HK ticker from filename stem, or None."""
+    stem = Path(path).stem
+    m = _FILENAME_TICKER_RE.match(stem)
+    return m.group(1).zfill(5) if m else None
+
+
+def detect_language(text: str) -> str:
+    """Classify text language. Returns one of: 'en', 'zh', 'mixed', 'unknown'.
+
+    Rule:
+      - 'en' if English share >= 80%
+      - 'zh' if Chinese share >= 80%
+      - 'mixed' if either is in (20%, 80%) and the other has at least 20%
+      - 'unknown' otherwise (empty text, langdetect failure)
+    """
+    if not text or not text.strip():
+        return "unknown"
+    try:
+        langs = detect_langs(text[:5000])  # cap to avoid huge inputs
+    except LangDetectException:
+        return "unknown"
+    shares: dict[str, float] = {}
+    for L in langs:
+        code = "en" if str(L.lang) == "en" else ("zh" if str(L.lang).startswith("zh") else None)
+        if code:
+            shares[code] = shares.get(code, 0.0) + float(L.prob)
+    en = shares.get("en", 0.0)
+    zh = shares.get("zh", 0.0)
+    if en >= 0.8:
+        return "en"
+    if zh >= 0.8:
+        return "zh"
+    if en >= 0.2 and zh >= 0.2:
+        return "mixed"
+    return "unknown"
+
 
 # ── 章节标题匹配正则 ─────────────────────────────────────────────────────────
 _SECTION_RE = re.compile(
@@ -43,9 +93,18 @@ _DATE_COVER_RE = re.compile(
     re.IGNORECASE,
 )
 _MONTHS_MAP = {
-    "january": "01", "february": "02", "march": "03", "april": "04",
-    "may": "05", "june": "06", "july": "07", "august": "08",
-    "september": "09", "october": "10", "november": "11", "december": "12",
+    "january": "01",
+    "february": "02",
+    "march": "03",
+    "april": "04",
+    "may": "05",
+    "june": "06",
+    "july": "07",
+    "august": "08",
+    "september": "09",
+    "october": "10",
+    "november": "11",
+    "december": "12",
 }
 _DATE_FILENAME_RE = re.compile(r"(\d{4})(\d{2})(\d{2})")
 
@@ -75,18 +134,6 @@ def _date_from_markdown(cover_md: str, filename: str) -> str | None:
     return _parse_date_from_filename(filename)
 
 
-def _extract_ticker(doc: pymupdf.Document) -> str | None:
-    """Read first 3 pages and return HK stock ticker, or None."""
-    pages = list(range(min(3, doc.page_count)))
-    return _ticker_from_markdown(pymupdf4llm.to_markdown(doc, pages=pages))
-
-
-def _extract_document_date(doc: pymupdf.Document, filename: str) -> str | None:
-    """Read first 3 pages and return ISO document date; fall back to filename."""
-    pages = list(range(min(3, doc.page_count)))
-    return _date_from_markdown(pymupdf4llm.to_markdown(doc, pages=pages), filename)
-
-
 def _matches_section_title(title: str) -> bool:
     """判断字符串是否是 Use of Proceeds 章节标题（大小写不敏感）。
 
@@ -102,18 +149,19 @@ def _matches_section_title(title: str) -> bool:
         return False
     # 必须整体匹配：标题内容与正则完全对应，不能只是包含一个子串
     # 用 fullmatch 而非 search，防止 "Use of Proceeds Summary" 误匹配
-    return bool(re.fullmatch(
-        r"(?:future\s+plans?\s+and\s+)?use\s+of\s+proceeds",
-        title.strip(),
-        re.IGNORECASE,
-    ))
+    return bool(
+        re.fullmatch(
+            r"(?:future\s+plans?\s+and\s+)?use\s+of\s+proceeds",
+            title.strip(),
+            re.IGNORECASE,
+        )
+    )
 
 
 # ── TOC 纯逻辑 ────────────────────────────────────────────────────────────────
 
-def _locate_in_toc_list(
-    toc: list[list], page_count: int
-) -> tuple[str, int, int] | None:
+
+def _locate_in_toc_list(toc: list[list], page_count: int) -> tuple[str, int, int] | None:
     """从 TOC 列表中定位目标章节的起止页（1-based）。
 
     参数格式与 PyMuPDF get_toc() 一致：[[level, title, page_1based], ...]
@@ -144,6 +192,7 @@ def _locate_in_toc_list(
 
 # ── TOC 定位（PDF 包装层） ─────────────────────────────────────────────────────
 
+
 def _locate_via_toc(doc: pymupdf.Document) -> tuple[str, int, int] | None:
     """从 PDF 书签中找到目标章节的起止页（1-based）。"""
     return _locate_in_toc_list(doc.get_toc(), doc.page_count)
@@ -151,9 +200,8 @@ def _locate_via_toc(doc: pymupdf.Document) -> tuple[str, int, int] | None:
 
 # ── Regex 纯逻辑 ──────────────────────────────────────────────────────────────
 
-def _locate_in_markdown(
-    md_text: str, total_pages: int
-) -> tuple[str, int, int] | None:
+
+def _locate_in_markdown(md_text: str, total_pages: int) -> tuple[str, int, int] | None:
     """在 Markdown 全文中定位目标章节，估算起止页（1-based）。
 
     同时识别两种标题格式：
@@ -203,6 +251,7 @@ def _locate_in_markdown(
 
 # ── 正则回退定位（PDF 包装层） ────────────────────────────────────────────────
 
+
 def _locate_via_regex(doc: pymupdf.Document) -> tuple[str, int, int] | None:
     """把全文转 Markdown，用正则找章节标题行，估算起止页（1-based）。"""
     md_full = pymupdf4llm.to_markdown(doc)
@@ -210,6 +259,7 @@ def _locate_via_regex(doc: pymupdf.Document) -> tuple[str, int, int] | None:
 
 
 # ── 文本提取 ──────────────────────────────────────────────────────────────────
+
 
 def _extract_text(doc: pymupdf.Document, start_page: int, end_page: int) -> str:
     """用 pymupdf4llm 提取指定页范围（1-based）的 Markdown 文本。"""
@@ -219,6 +269,7 @@ def _extract_text(doc: pymupdf.Document, start_page: int, end_page: int) -> str:
 
 
 # ── 表格提取 ──────────────────────────────────────────────────────────────────
+
 
 def _extract_tables(pdf_path: str, start_page: int, end_page: int) -> list[dict[str, Any]]:
     """用 pdfplumber 提取指定页范围（1-based）内的所有表格。
@@ -249,9 +300,56 @@ def _extract_tables(pdf_path: str, start_page: int, end_page: int) -> list[dict[
     return results
 
 
+# ── 内容哈希磁盘缓存 ─────────────────────────────────────────────────────────
+# Cache lives at data/l1_cache/<sha256_first16>.json.  The cache dir is
+# resolved lazily so tests can monkeypatch config.L1_CACHE_DIR freely.
+
+_CACHE_DIR_ENV: Path | None = None  # override in tests via monkeypatch
+
+
+def _cache_dir() -> Path:
+    """Return the L1 cache directory (lazily resolved)."""
+    if _CACHE_DIR_ENV is not None:
+        return _CACHE_DIR_ENV
+    from hk_ipo.config import L1_CACHE_DIR  # local import to avoid circular
+
+    return L1_CACHE_DIR
+
+
+def _pdf_content_hash(pdf_path: str) -> str:
+    """Return the first 16 hex chars of the SHA-256 hash of the PDF bytes."""
+    data = Path(pdf_path).read_bytes()
+    return hashlib.sha256(data).hexdigest()[:16]
+
+
+def _cache_path(content_hash: str) -> Path:
+    return _cache_dir() / f"{content_hash}.json"
+
+
+def _load_from_cache(content_hash: str) -> dict[str, Any] | None:
+    """Return cached parse result for *content_hash*, or None on miss."""
+    p = _cache_path(content_hash)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+    return None
+
+
+def _save_to_cache(content_hash: str, result: dict[str, Any]) -> None:
+    """Write *result* to the cache file for *content_hash*."""
+    cache = _cache_dir()
+    cache.mkdir(parents=True, exist_ok=True)
+    _cache_path(content_hash).write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
 # ── 主入口函数 ────────────────────────────────────────────────────────────────
 
-def extract_use_of_proceeds(pdf_path: str) -> dict[str, Any]:
+
+def extract_use_of_proceeds(pdf_path: str, *, force: bool = False) -> dict[str, Any]:
     """从指定 PDF 中提取 Use of Proceeds 章节，返回结构化字典。
 
     字典结构：
@@ -261,14 +359,52 @@ def extract_use_of_proceeds(pdf_path: str) -> dict[str, Any]:
         end_page          : 结束页（1-based）
         text              : Markdown 格式章节全文
         tables            : pdfplumber 提取的表格列表
-        extraction_method : "toc" | "regex"
+        extraction_method : "toc" | "regex" | "skipped"
+        language          : "en" | "zh" | "mixed" | "unknown"
+        skipped           : bool
+
+    Content-hash cache: on non-force runs the function checks
+    ``data/l1_cache/<sha256_first16>.json`` before invoking any PDF library.
+    Pass ``force=True`` to skip the cache and always re-parse.
 
     找不到章节时抛出 ValueError。
     """
+    # ── Content-hash cache check ────────────────────────────────────────────
+    content_hash = _pdf_content_hash(pdf_path)
+    if not force:
+        cached = _load_from_cache(content_hash)
+        if cached is not None:
+            return cached
+
     doc = pymupdf.open(pdf_path)
     try:
-        hk_ticker = _extract_ticker(doc)
-        document_date = _extract_document_date(doc, Path(pdf_path).name)
+        # v2 — read a head sample to detect language; skip non-English with stub
+        head_pages = list(range(min(5, doc.page_count)))
+        head_md = pymupdf4llm.to_markdown(doc, pages=head_pages)
+        language = detect_language(head_md)
+
+        # v2 — derive ticker from filename FIRST (authoritative), fall back to cover
+        filename_ticker = ticker_from_filename(pdf_path)
+        cover_ticker = _ticker_from_markdown(head_md)
+        hk_ticker = filename_ticker or (cover_ticker.zfill(5) if cover_ticker else None)
+        document_date = _date_from_markdown(head_md, Path(pdf_path).name)
+
+        if language == "zh":
+            zh_result: dict[str, Any] = {
+                "company_file": Path(pdf_path).name,
+                "hk_ticker": hk_ticker,
+                "document_date": document_date,
+                "section_title": "",
+                "start_page": 0,
+                "end_page": 0,
+                "text": "",
+                "tables": [],
+                "extraction_method": "skipped",
+                "language": language,
+                "skipped": True,
+            }
+            _save_to_cache(content_hash, zh_result)
+            return zh_result
 
         result = _locate_via_toc(doc)
         method = "toc"
@@ -285,7 +421,7 @@ def extract_use_of_proceeds(pdf_path: str) -> dict[str, Any]:
 
     tables = _extract_tables(pdf_path, start_page, end_page)
 
-    return {
+    final_result: dict[str, Any] = {
         "company_file": Path(pdf_path).name,
         "hk_ticker": hk_ticker,
         "document_date": document_date,
@@ -295,49 +431,88 @@ def extract_use_of_proceeds(pdf_path: str) -> dict[str, Any]:
         "text": text,
         "tables": tables,
         "extraction_method": method,
+        "language": language,
+        "skipped": False,
     }
+    _save_to_cache(content_hash, final_result)
+    return final_result
 
 
-def process_all(raw_dir: Path, sections_dir: Path) -> None:
-    """处理 raw_dir 下所有 PDF，结果写入 sections_dir。"""
+def process_all(
+    raw_dir: Path,
+    sections_dir: Path,
+    limit: int | None = None,
+    force: bool = False,
+    all_files: bool = True,
+) -> None:
+    """处理 raw_dir 下所有 PDF，结果写入 sections_dir。
+
+    Args:
+        raw_dir: Directory containing PDF files.
+        sections_dir: Directory to write JSON output.
+        limit: If set, process at most this many PDFs.
+        force: If True, overwrite existing output files.
+        all_files: If True, filter to only filenames matching \\d{4,5}.pdf.
+    """
     pdfs = sorted(raw_dir.glob("*.pdf"))
+    if all_files:
+        skipped = [p for p in pdfs if ticker_from_filename(p.name) is None]
+        for p in skipped:
+            logger.warning("filename does not match \\d{4,5}.pdf: %s", p.name)
+        pdfs = [p for p in pdfs if ticker_from_filename(p.name) is not None]
+    if limit is not None:
+        pdfs = pdfs[:limit]
     if not pdfs:
-        print(f"[WARN] No PDF files found in {raw_dir}")
+        logger.warning("No PDF files to process in %s", raw_dir)
         return
 
-    for pdf_path in pdfs:
-        print(f"\n→ {pdf_path.name}")
+    for pdf in pdfs:
+        ticker = ticker_from_filename(pdf.name)
+        if ticker is None:
+            logger.warning(
+                "Non-numeric filename, using stem as output name: %s", pdf.name
+            )
+            ticker = Path(pdf.name).stem
+        out_path = sections_dir / f"{ticker}.json"
+        if not force and out_path.exists():
+            logger.info("%s exists; --force to re-run", out_path.name)
+            continue
         try:
-            data = extract_use_of_proceeds(str(pdf_path))
-        except ValueError as e:
-            print(f"  [WARN] {e}")
+            data = extract_use_of_proceeds(str(pdf), force=force)
+        # Broad except: outermost CLI batch loop guard — log and skip any
+        # unexpected error so one bad PDF does not abort the entire run.
+        except Exception as exc:
+            logger.error("%s: %s", pdf.name, exc)
             continue
-        except Exception as e:
-            print(f"  [ERROR] Unexpected error: {e}")
-            continue
-
-        out_path = sections_dir / f"{pdf_path.stem}.json"
         out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        word_count = len(data["text"].split())
-        print(f"  method      : {data['extraction_method']}")
-        print(f"  section     : {data['section_title']!r}")
-        print(f"  ticker      : {data['hk_ticker']}")
-        print(f"  date        : {data['document_date']}")
-        print(f"  pages       : {data['start_page']}–{data['end_page']}")
-        print(f"  text words  : {word_count:,}")
-        print(f"  tables found: {len(data['tables'])}")
-        print(f"  → saved to  : {out_path.name}")
+        logger.info("  -> %s (lang=%s, skipped=%s)", out_path.name, data.get('language'), data.get('skipped'))
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Allow running as: python -m hk_ipo.l1_sectioning [raw_dir] [sections_dir]
+    import argparse
+
+    p = argparse.ArgumentParser()
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--all", action="store_true")
+    g.add_argument("pdf", nargs="?")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--limit", type=int)
+    args = p.parse_args()
+
     from hk_ipo.config import RAW_PDFS_DIR, SECTIONS_DIR
 
-    raw_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else RAW_PDFS_DIR
-    sections_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else SECTIONS_DIR
-    sections_dir.mkdir(parents=True, exist_ok=True)
+    SECTIONS_DIR.mkdir(parents=True, exist_ok=True)
 
-    process_all(raw_dir, sections_dir)
+    if args.all:
+        process_all(RAW_PDFS_DIR, SECTIONS_DIR, limit=args.limit, force=args.force, all_files=True)
+    else:
+        data = extract_use_of_proceeds(args.pdf)
+        ticker = data.get("hk_ticker") or "unknown"
+        out = SECTIONS_DIR / f"{ticker}.json"
+        if not args.force and out.exists():
+            logger.warning("%s exists; --force to re-run", out.name)
+        else:
+            out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"-> {out}")  # intentional stdout

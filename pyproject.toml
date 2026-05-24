@@ -14,6 +14,8 @@ dependencies = [
     "openai>=1.40",
     "pandas",
     "matplotlib",
+    "langdetect>=1.0.9",
+    "portalocker>=2.8",
 ]
 
 [project.optional-dependencies]
@@ -27,3 +29,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+addopts = "-p no:anyio"
+markers = [
+    "e2e: end-to-end black-box test invoking the full pipeline (slow, requires API key).",
+]
+testpaths = ["tests"]

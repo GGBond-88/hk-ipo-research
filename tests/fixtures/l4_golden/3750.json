@@ -1,0 +1,19 @@
+{
+  "hk_ticker": "3750",
+  "source_extracted_file": "2025051200005.json",
+  "comment": "Hand-labelled golden fixture for A4.5. Two use items: Hungary battery factory (overseas capacity expansion) and working capital.",
+  "uses": [
+    {
+      "use_id": "use_001",
+      "parent_category": "Growth",
+      "main_category": "Capacity Expansion",
+      "sub_category": "New manufacturing facilities"
+    },
+    {
+      "use_id": "use_002",
+      "parent_category": "Working Capital",
+      "main_category": "General Working Capital",
+      "sub_category": null
+    }
+  ]
+}

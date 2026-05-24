@@ -1,0 +1,15 @@
+# Implement Review Results: Task-002
+
+## Spec Review Issues
+
+### SR-001: Dashboard test fails for environment reason, not missing-frontend reason
+- Status: Resolved
+- Description: The test `test_frontend_build_produces_dist_folder` FAILS with `FileNotFoundError` from `subprocess.run(["npm", "install"])` because `shutil.which("npm")` returns `C:\Program Files\nodejs\npm.CMD` but `subprocess.run` on Python 3.14 Windows cannot execute `.CMD` files without `shell=True`. The `_have_npm()` skipif guard therefore passes (npm IS found by `which`) but the subprocess invocation fails at the OS level. Step 7 of the task spec requires that failures "should NOT be due to test syntax errors; they should be due to missing pipeline modules / scripts / frontend (the implementations come in later tasks)." This failure is an environment/subprocess-platform issue, not a missing-frontend issue. The test has not actually demonstrated that it will transition from RED to GREEN when the frontend code is written later, because the failure would persist even with a complete frontend that builds successfully. This undermines the outer TDD loop: we have not seen this test fail for the correct reason.
+- Decision Reason: Fixed by using `npm_exe = shutil.which("npm")` (full path) instead of bare `"npm"` in subprocess.run. Verified: npm now correctly found and executed (C:\Program Files\nodejs\npm.CMD). Test now fails for the correct RED-phase reason (missing package.json / frontend code not yet built).
+
+## Code Review Issues
+
+### CR-001: Type safety bypass on npm_exe assignment suppresses legitimate None risk
+- Status: Resolved
+- Description: In `tests/e2e/test_dashboard_build_e2e.py:30`, the assignment `npm_exe: str = shutil.which("npm")  # type: ignore[assignment]` suppresses a legitimate type-checker warning. `shutil.which()` returns `str | None`, but the variable is annotated as `str` and the assignment uses `# type: ignore[assignment]` to bypass the type error. The `_have_npm()` skipif guard (line 19) calls `shutil.which("npm")` independently at collection time — these are two separate calls with no explicit guarantee they agree. If the runtime `shutil.which()` call returned `None`, the subsequent `subprocess.run([npm_exe, "install"])` on line 33 would crash with `TypeError: sequence item 0: expected str, NoneType found` — an opaque failure that would not point back to the root cause. The fix is to either drop the type annotation (let the type checker infer `str | None` and rely on the skipif guard being co-located), or assert non-None: `assert npm_exe is not None, "npm not found (skipif guard should have caught this)"`.
+- Decision Reason: Fixed by replacing `npm_exe: str = shutil.which("npm")  # type: ignore[assignment]` with untyped `npm_exe = shutil.which("npm")` followed by `assert npm_exe is not None, "npm not found in PATH (skipif guard should have caught this)"`. This eliminates the type-safety bypass, makes the invariant explicit, and provides a clear diagnostic if the guard invariant is ever violated.

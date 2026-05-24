@@ -11,7 +11,6 @@ import argparse
 import concurrent.futures
 import io
 import json
-import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -23,20 +22,18 @@ import openai
 from pydantic import ValidationError
 
 from hk_ipo import config
-from hk_ipo.schema import CATEGORY_L2, SCHEMA_VERSION, validate_extraction
+from hk_ipo.llm_client import LLMClient
+from hk_ipo.logging_setup import get_logger
+from hk_ipo.schema import SCHEMA_VERSION, validate_extraction
 
-logger = logging.getLogger(__name__)
-
-# ── Module-level OpenAI client (created once at import time) ─────────────────
-
-_openai_client = openai.OpenAI(
-    api_key=config.OPENROUTER_API_KEY or "placeholder-not-set",
-    base_url=config.OPENROUTER_BASE_URL,
-)
+logger = get_logger(__name__)
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
-_CATEGORY_LIST = "\n".join(f'  - "{c}"' for c in CATEGORY_L2)
+# The old _CATEGORY_LIST used CATEGORY_L2. In v2, L2 emits category_raw only;
+# classification is deferred to L4. Keep the variable for backwards compat but
+# ensure it is empty (no old vocabulary leaked into the prompt).
+_CATEGORY_LIST = ""
 
 _SYSTEM_PROMPT = (
     "You are a financial data extraction assistant specialised in Hong Kong IPO prospectuses.\n"
@@ -49,8 +46,6 @@ _SYSTEM_PROMPT = (
     '  "total_net_proceeds_hkd_million": <number or null>,\n'
     '  "uses": [\n'
     "    {\n"
-    '      "category": "<one of the allowed categories or null>",\n'
-    '      "category_proposed": "<free-form label if no category fits, else null>",\n'
     '      "category_raw": "<verbatim use-description phrase from source>",\n'
     '      "percentage": <number or null>,\n'
     '      "amount_hkd_million": <number or null>,\n'
@@ -74,10 +69,9 @@ _SYSTEM_PROMPT = (
     "  including all sub-bullets belongs in that item's source_text.\n"
     "  Do NOT create a separate entry for a sub-bullet or lettered clause.\n"
     "- source_text must be the COMPLETE paragraph for that bullet from the source.\n"
-    "- category must be EXACTLY one of:\n"
-    + _CATEGORY_LIST + "\n"
-    "- If no category fits, set category_proposed to the raw label and set category to\n"
-    "  the closest standard match above.\n"
+    "- category_raw must be a SHORT verbatim phrase from the source that describes "
+    'what the proceeds are used for (e.g. "research and development", '
+    '"debt repayment", "manufacturing expansion").\n'
     "- Extract ALL top-level items. Do not stop early.\n"
     "\n"
     "## Example (FICTIONAL numbers -- format only)\n"
@@ -91,8 +85,6 @@ _SYSTEM_PROMPT = (
     '  "total_net_proceeds_hkd_million": 5000.0,\n'
     '  "uses": [\n'
     "    {\n"
-    '      "category": "Manufacturing expansion",\n'
-    '      "category_proposed": null,\n'
     '      "category_raw": "manufacturing expansion",\n'
     '      "percentage": 60.0,\n'
     '      "amount_hkd_million": 3000.0,\n'
@@ -100,8 +92,6 @@ _SYSTEM_PROMPT = (
     '      "source_text": "Approximately 60% or HK$3,000 million will be used for manufacturing expansion."\n'  # noqa: E501
     "    },\n"
     "    {\n"
-    '      "category": "Working capital",\n'
-    '      "category_proposed": null,\n'
     '      "category_raw": "working capital",\n'
     '      "percentage": 40.0,\n'
     '      "amount_hkd_million": 2000.0,\n'
@@ -113,10 +103,15 @@ _SYSTEM_PROMPT = (
     "\n"
     "The example uses FICTIONAL numbers to show format only. "
     "Do NOT copy example numbers into your output.\n"
+    "\n"
+    "## Important\n"
+    "- Do NOT attempt to classify items into categories. Only provide category_raw.\n"
+    "- Classification into Parent/Main/Sub is handled by a later pass.\n"
 )
 
 
 # ── User prompt builder ───────────────────────────────────────────────────────
+
 
 def _build_user_prompt(text: str) -> str:
     return f"Extract use-of-proceeds data from this HK IPO prospectus section:\n\n---\n{text}\n---"
@@ -124,8 +119,10 @@ def _build_user_prompt(text: str) -> str:
 
 # ── LLM call helpers ──────────────────────────────────────────────────────────
 
+
 def _call_llm(text: str) -> dict[str, Any]:
-    response = _openai_client.chat.completions.create(
+    response = LLMClient.get().chat(
+        stage="L2",
         model=config.L2_TEXT_MODEL,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -150,7 +147,8 @@ def _call_llm(text: str) -> dict[str, Any]:
 
 def _call_llm_with_prompt(user_content: str) -> dict[str, Any]:
     """Same as _call_llm but takes arbitrary user content (for correction retry)."""
-    response = _openai_client.chat.completions.create(
+    response = LLMClient.get().chat(
+        stage="L2",
         model=config.L2_TEXT_MODEL,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -202,6 +200,7 @@ def _clean_section_text(text: str) -> str:
 
 # ── Result helpers ────────────────────────────────────────────────────────────
 
+
 def _safe_float_or_none(val: Any) -> float | None:
     if val is None:
         return None
@@ -221,17 +220,22 @@ def _parse_llm_output(data: dict[str, Any], company_file: str = "") -> list[dict
         amt = _safe_float_or_none(item.get("amount_hkd_million"))
         if pct is None and amt is None:
             continue
-        uses.append({
-            "use_id": f"use_{i:03d}",
-            "parent_id": None,
-            "category": item.get("category") or None,
-            "category_proposed": item.get("category_proposed") or None,
-            "category_raw": str(item.get("category_raw") or ""),
-            "amount_hkd_million": amt,
-            "percentage": pct,
-            "description": str(item.get("description") or ""),
-            "source_text": str(item.get("source_text") or ""),
-        })
+        uses.append(
+            {
+                "use_id": f"use_{i:03d}",
+                "parent_id": None,
+                "category": None,
+                "category_proposed": None,
+                "parent_category": None,
+                "main_category": None,
+                "sub_category": None,
+                "category_raw": str(item.get("category_raw") or ""),
+                "amount_hkd_million": amt,
+                "percentage": pct,
+                "description": str(item.get("description") or ""),
+                "source_text": str(item.get("source_text") or ""),
+            }
+        )
     return uses
 
 
@@ -293,23 +297,21 @@ def _run_with_retry(fn: Any, max_retries: int = 5) -> Any:
                             retry_after = float(ra)
                         except (ValueError, TypeError):
                             retry_after = None
-                wait = retry_after if retry_after is not None else 2 ** attempt
-                print(
-                    f"  [RETRY] 429 RateLimitError, attempt {attempt + 1}. "
-                    f"Waiting {wait}s..."
-                )
+                wait = retry_after if retry_after is not None else 2**attempt
+                logger.warning("429 RateLimitError, attempt %d. Waiting %ds...", attempt + 1, wait)
                 time.sleep(wait)
         except _RETRYABLE as exc:
             last_exc = exc
             if attempt < max_retries - 1:
-                wait = 2 ** attempt
-                print(f"  [RETRY] attempt {attempt + 1} failed ({exc!r}). Waiting {wait}s...")
+                wait = 2**attempt
+                logger.warning("attempt %d failed (%r). Waiting %ds...", attempt + 1, exc, wait)
                 time.sleep(wait)
         # Programming errors (ValueError, AttributeError, etc.) propagate immediately.
     raise last_exc  # type: ignore[misc]
 
 
 # ── Core extraction ───────────────────────────────────────────────────────────
+
 
 def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
     """Run LLM extraction on an L1 section dict; return the L2 output dict."""
@@ -321,7 +323,7 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
     document_date = section_data.get("document_date")
 
     if hk_ticker is None and document_date is None:
-        print("  [WARN] hk_ticker/document_date missing -- re-run L1 to populate")
+        logger.warning("hk_ticker/document_date missing -- re-run L1 to populate")
 
     # First LLM call
     raw = _run_with_retry(lambda: _call_llm(text))
@@ -365,14 +367,15 @@ def extract_section(section_data: dict[str, Any]) -> dict[str, Any]:
                 )
                 result["needs_human_review"] = True
                 result["review_errors"] = errors2
-        except Exception as exc:
-            logger.warning("[WARN] Self-correction call failed for %s: %s", company_file, exc)
+        except (openai.APIError, ValueError, json.JSONDecodeError) as exc:
+            logger.exception("Self-correction call failed for %s", company_file)
             result["needs_human_review"] = True
 
     return result
 
 
 # ── File I/O ──────────────────────────────────────────────────────────────────
+
 
 def process_single(
     section_file: Path,
@@ -394,35 +397,33 @@ def process_single(
 
     # Resumability: skip if output already exists (unless --force).
     if not force and out_path.exists():
-        print(f"[SKIP] already done: {out_path.name}")
+        logger.info("already done: %s", out_path.name)
         return json.loads(out_path.read_text(encoding="utf-8"))
 
     section_data = json.loads(section_file.read_text(encoding="utf-8"))
 
-    print(f"\n-> {section_file.name}")
+    logger.info("-> %s", section_file.name)
     try:
         result = extract_section(section_data)
-    except Exception as exc:
+    except (openai.APIError, ValueError, json.JSONDecodeError, OSError) as exc:
         err_payload = {
             "error": str(exc),
             "error_type": type(exc).__name__,
             "section_file": str(section_file),
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         }
-        err_path.write_text(
-            json.dumps(err_payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        print(f"  [ERROR] {exc}")
-        print(f"  -> error written to: {err_path.name}")
+        err_path.write_text(json.dumps(err_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.error("%s", exc)
+        logger.info("  -> error written to: %s", err_path.name)
         raise
 
     out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     vp = result["validation_preview"]
-    print(f"  top-level   : {vp['top_level_count']} items")
-    print(f"  total items : {vp['total_items_count']} (incl. sub-items)")
-    print(f"  pct sum     : {vp['percentage_sum']}%")
-    print(f"  total HK$M  : {result['total_net_proceeds_hkd_million']}")
-    print(f"  -> saved to  : {out_path.name}")
+    logger.info("  top-level   : %s items", vp['top_level_count'])
+    logger.info("  total items : %s (incl. sub-items)", vp['total_items_count'])
+    logger.info("  pct sum     : %s%%", vp['percentage_sum'])
+    logger.info("  total HK$M  : %s", result['total_net_proceeds_hkd_million'])
+    logger.info("  -> saved to  : %s", out_path.name)
     return result
 
 
@@ -450,7 +451,7 @@ def process_all(
     """
     jsons = sorted(sections_dir.glob("*.json"))
     if not jsons:
-        print(f"[WARN] No JSON files found in {sections_dir}")
+        logger.warning("No JSON files found in %s", sections_dir)
         return {"succeeded": 0, "failed": 0, "skipped": 0, "total": 0}
 
     succeeded = failed = skipped = 0
@@ -468,9 +469,7 @@ def process_all(
             section_data = json.loads(jf.read_text(encoding="utf-8"))
             result = extract_section(section_data)
             extracted_dir.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(
-                json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             vp = result["validation_preview"]
             buf.write(f"  top-level   : {vp['top_level_count']} items\n")
             buf.write(f"  total items : {vp['total_items_count']} (incl. sub-items)\n")
@@ -478,7 +477,7 @@ def process_all(
             buf.write(f"  total HK$M  : {result['total_net_proceeds_hkd_million']}\n")
             buf.write(f"  -> saved to  : {out_path.name}\n")
             return jf.name, True, buf.getvalue()
-        except Exception as exc:
+        except (openai.APIError, ValueError, json.JSONDecodeError, OSError) as exc:
             buf.write(f"  [ERROR] {exc}\n")
             return jf.name, False, buf.getvalue()
 
@@ -486,7 +485,7 @@ def process_all(
         futures = {executor.submit(_process_one, jf): jf for jf in jsons}
         for future in concurrent.futures.as_completed(futures):
             filename, ok, log_output = future.result()
-            print(log_output, end="")
+            logger.info(log_output.strip())
             out_path = extracted_dir / f"{Path(filename).stem}.json"
             if not force and out_path.exists() and "[SKIP]" in log_output:
                 skipped += 1
@@ -495,9 +494,9 @@ def process_all(
             else:
                 failed += 1
 
-    print(
-        f"\nL2 complete: {succeeded} succeeded, {failed} failed, "
-        f"{skipped} skipped (of {len(jsons)} total)"
+    logger.info(
+        "L2 complete: %s succeeded, %s failed, %s skipped (of %s total)",
+        succeeded, failed, skipped, len(jsons),
     )
     return {"succeeded": succeeded, "failed": failed, "skipped": skipped, "total": len(jsons)}
 
@@ -509,16 +508,20 @@ if __name__ == "__main__":
         description="L2: structure Use of Proceeds via LLM (direct OpenAI SDK + OpenRouter)"
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--single", metavar="FILENAME",
-                       help="Process one file from data/sections/ by name")
-    group.add_argument("--all", action="store_true",
-                       help="Process all files in data/sections/")
+    group.add_argument(
+        "--single", metavar="FILENAME", help="Process one file from data/sections/ by name"
+    )
+    group.add_argument("--all", action="store_true", help="Process all files in data/sections/")
     parser.add_argument(
-        "--force", action="store_true",
+        "--force",
+        action="store_true",
         help="Re-process files even if output already exists",
     )
     parser.add_argument(
-        "--workers", type=int, default=6, metavar="N",
+        "--workers",
+        type=int,
+        default=6,
+        metavar="N",
         help="Number of parallel worker threads for --all (default 6)",
     )
     args = parser.parse_args()
@@ -531,7 +534,8 @@ if __name__ == "__main__":
         sf = SECTIONS_DIR / args.single
         if not sf.exists():
             import sys
-            print(f"[ERROR] Not found: {sf}")
+
+            logger.error("Not found: %s", sf)
             sys.exit(1)
         process_single(sf, EXTRACTED_DIR, force=args.force)
     elif args.all:

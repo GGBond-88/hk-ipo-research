@@ -1,16 +1,20 @@
 """L3 验证层：对 L2 提取结果做数值校验和格式规范化。
 
-7 项检查（按 check_id 标识）：
+11 项检查（按 check_id 标识）：
 
-  [required_fields]     必须字段存在且非 null                → ERROR
-  [ticker_format]       hk_ticker 为 4-5 位纯数字           → ERROR
-  [percentage_sum]      顶层用途百分比之和≈100%             → ERROR
-                          （任一百分比为 null 时降级为 WARNING）
-  [amount_sum]          顶层金额之和≈总募资额（±1%）        → ERROR
-                          （任一金额或总额为 null 时降级为 WARNING）
-  [item_consistency]    单项 amount ≈ total×pct/100（±2%）  → ERROR
-  [no_duplicate_use_id] use_id 唯一性                        → ERROR
-  [category_vocab]      category 在预定义词表中              → WARNING（不影响 passed）
+  [required_fields]       必须字段存在且非 null                → ERROR
+  [ticker_format]         hk_ticker 为 4-5 位纯数字           → ERROR
+  [percentage_sum]        顶层用途百分比之和≈100%             → ERROR
+                            （任一百分比为 null 时降级为 WARNING）
+  [amount_sum]            顶层金额之和≈总募资额（±1%）        → ERROR
+                            （任一金额或总额为 null 时降级为 WARNING）
+  [item_consistency]      单项 amount ≈ total×pct/100（±2%）  → ERROR
+  [no_duplicate_use_id]   use_id 唯一性                        → ERROR
+  [category_vocab]        category 在预定义词表中              → WARNING（不影响 passed）
+  [category_l1]           category 可映射到 L1 类别             → ERROR
+  [category_raw_present]  every use must have non-empty category_raw → ERROR
+  [total_proceeds_present] total_net_proceeds must be non-null  → ERROR
+  [schema_version]        schema_version presence/mismatch     → WARNING（不影响 passed）
 
 输入：data/extracted/<stem>.json
 输出：data/extracted/<stem>.validated.json  （带 "validation" 块）
@@ -19,13 +23,19 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import io
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from hk_ipo.logging_setup import get_logger
 from hk_ipo.schema import CATEGORY_L1_MAP, CATEGORY_L2, SCHEMA_VERSION
+
+logger = get_logger(__name__)
 
 # ── Allowed category vocabulary (imported from schema — single source of truth)
 
@@ -45,6 +55,7 @@ _TICKER_RE = re.compile(r"^\d{4,5}$")
 
 
 # ── Core validation logic ─────────────────────────────────────────────────────
+
 
 def validate_record(
     extracted: dict[str, Any],
@@ -68,22 +79,15 @@ def validate_record(
     warnings: list[str] = []
 
     # ── [required_fields] ────────────────────────────────────────────────────
-    missing = [
-        f for f in _REQUIRED_TOP_FIELDS
-        if f not in extracted or extracted[f] is None
-    ]
+    missing = [f for f in _REQUIRED_TOP_FIELDS if f not in extracted or extracted[f] is None]
     if missing:
-        errors.append(
-            f"[required_fields] Missing or null fields: {', '.join(missing)}"
-        )
+        errors.append(f"[required_fields] Missing or null fields: {', '.join(missing)}")
 
     # ── [ticker_format] ──────────────────────────────────────────────────────
     ticker = extracted.get("hk_ticker")
     if ticker is not None:
         if not _TICKER_RE.match(str(ticker)):
-            errors.append(
-                f"[ticker_format] hk_ticker {ticker!r} is not a 4-5 digit code"
-            )
+            errors.append(f"[ticker_format] hk_ticker {ticker!r} is not a 4-5 digit code")
     # If ticker is None it was already flagged by [required_fields].
 
     # ── Collect uses for subsequent checks ───────────────────────────────────
@@ -104,9 +108,7 @@ def validate_record(
         else:
             seen_ids.add(uid)
     if dupes:
-        errors.append(
-            f"[no_duplicate_use_id] Duplicate use_id(s): {', '.join(dupes)}"
-        )
+        errors.append(f"[no_duplicate_use_id] Duplicate use_id(s): {', '.join(dupes)}")
 
     # ── [percentage_sum] ─────────────────────────────────────────────────────
     pcts = [u.get("percentage") for u in top_uses]
@@ -162,6 +164,10 @@ def validate_record(
         # label but flagged it as imprecise via category_proposed.
         if category_proposed:
             continue
+        # v2 pipeline: L2 sets category=None because classification is deferred
+        # to L4. None is not a vocab gap — it is intentional.
+        if cat is None:
+            continue
         if cat not in _CATEGORY_VOCAB:
             warnings.append(
                 f"[category_vocab] use_id={u.get('use_id')!r}: "
@@ -203,11 +209,28 @@ def validate_record(
             "old data is still processable"
         )
 
+    # ── [category_raw_present] — v2: every use must have non-empty category_raw ──
+    for u in uses:
+        cat_raw_val = u.get("category_raw", "")
+        if cat_raw_val is None or not str(cat_raw_val).strip():
+            errors.append(
+                f"[category_raw_present] use_id={u.get('use_id')!r}: "
+                "category_raw is empty or missing; L2 must provide a raw label"
+            )
+
+    # ── [total_proceeds_present] — v2: total_net_proceeds must be non-null ──────
+    tp = extracted.get("total_net_proceeds_hkd_million")
+    if tp is None:
+        errors.append("[total_proceeds_present] total_net_proceeds_hkd_million is missing or null")
+    elif float(tp) < 0:
+        errors.append("[total_proceeds_present] total_net_proceeds_hkd_million is negative")
+
     passed = len(errors) == 0
     return passed, errors, warnings
 
 
 # ── File I/O ──────────────────────────────────────────────────────────────────
+
 
 def validate_file(
     extracted_file: Path,
@@ -219,10 +242,8 @@ def validate_file(
     Returns the augmented dict (original data + "validation" block).
     """
     validated_dir.mkdir(parents=True, exist_ok=True)
-    extracted: dict[str, Any] = json.loads(
-        extracted_file.read_text(encoding="utf-8")
-    )
-    stem = extracted_file.stem          # e.g. "ltn20180907011"
+    extracted: dict[str, Any] = json.loads(extracted_file.read_text(encoding="utf-8"))
+    stem = extracted_file.stem  # e.g. "ltn20180907011"
     out_path = validated_dir / f"{stem}.validated.json"
 
     passed, errors, warnings = validate_record(extracted, tolerance_pct)
@@ -237,9 +258,7 @@ def validate_file(
         "validated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
-    out_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
 
 
@@ -247,9 +266,10 @@ def process_all(
     extracted_dir: Path,
     validated_dir: Path,
     tolerance_pct: float = 1.0,
+    workers: int = 4,
 ) -> dict[str, Any]:
     """Validate every *.json (excluding *.validated.json and *.error.json) in
-    extracted_dir; write results to validated_dir.
+    extracted_dir, write results to validated_dir, using a thread pool.
 
     Returns a summary dict: {"passed": int, "failed": int, "total": int}.
     """
@@ -259,39 +279,47 @@ def process_all(
         if ".validated" not in p.name and ".error" not in p.name
     )
     if not jsons:
-        print(f"[WARN] No extracted JSON files found in {extracted_dir}")
+        logger.warning("No extracted JSON files found in %s", extracted_dir)
         return {"passed": 0, "failed": 0, "total": 0}
 
-    passed_count = failed_count = 0
-    for jf in jsons:
-        print(f"\n→ {jf.name}")
+    passed_count = 0
+    failed_count = 0
+
+    def _process_one(jf: Path) -> tuple[str, bool, str]:
+        """Process one file; return (filename, passed, log_output)."""
+        buf = io.StringIO()
+        buf.write(f"-> {jf.name}\n")
         try:
             result = validate_file(jf, validated_dir, tolerance_pct)
+            v = result["validation"]
+            status = "PASS" if v["passed"] else "FAIL"
+            buf.write(
+                f"  {status}  (ticker={result.get('hk_ticker')}, "
+                f"date={result.get('document_date')})\n"
+            )
+            for e in v["errors"]:
+                buf.write(f"  ERROR: {e}\n")
+            for w in v["warnings"]:
+                buf.write(f"  WARN:  {w}\n")
+            return jf.name, v["passed"], buf.getvalue()
         except Exception as exc:
-            failed_count += 1
-            print(f"  [ERROR] Could not validate: {exc}")
-            continue
+            buf.write(f"  [ERROR] {exc}\n")
+            return jf.name, False, buf.getvalue()
 
-        v = result["validation"]
-        status = "PASS" if v["passed"] else "FAIL"
-        print(
-            f"  {status}  (ticker={result.get('hk_ticker')}, "
-            f"date={result.get('document_date')})"
-        )
-        for e in v["errors"]:
-            print(f"  ERROR: {e}")
-        for w in v["warnings"]:
-            print(f"  WARN:  {w}")
-
-        if v["passed"]:
-            passed_count += 1
-        else:
-            failed_count += 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_process_one, jf): jf for jf in jsons}
+        for future in concurrent.futures.as_completed(futures):
+            filename, ok, log_output = future.result()
+            logger.info(log_output.strip())
+            if ok:
+                passed_count += 1
+            else:
+                failed_count += 1
 
     total = passed_count + failed_count
-    print(
-        f"\nL3 complete: {passed_count} passed, {failed_count} failed "
-        f"(of {total} total)"
+    logger.info(
+        "L3 complete: %s passed, %s failed (of %s total)",
+        passed_count, failed_count, total,
     )
     return {"passed": passed_count, "failed": failed_count, "total": total}
 
@@ -299,21 +327,36 @@ def process_all(
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="L3: validate L2 extracted JSON files"
-    )
+    parser = argparse.ArgumentParser(description="L3: validate L2 extracted JSON files")
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--single", metavar="FILENAME",
+        "--single",
+        metavar="FILENAME",
         help="Validate one file from data/extracted/ by name",
     )
     group.add_argument(
-        "--all", action="store_true",
+        "--all",
+        action="store_true",
         help="Validate all files in data/extracted/",
     )
     parser.add_argument(
-        "--tolerance-pct", type=float, default=1.0, metavar="PCT",
+        "--tolerance-pct",
+        type=float,
+        default=1.0,
+        metavar="PCT",
         help="Max allowed deviation of percentage sum from 100%% (default 1.0)",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero on any validation failure",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Number of parallel worker threads for --all (default 4)",
     )
     args = parser.parse_args()
 
@@ -322,21 +365,23 @@ if __name__ == "__main__":
     EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
 
     if args.single:
-        import sys
-
         sf = EXTRACTED_DIR / args.single
         if not sf.exists():
-            print(f"[ERROR] Not found: {sf}")
+            logger.error("Not found: %s", sf)
             sys.exit(1)
         res = validate_file(sf, EXTRACTED_DIR, args.tolerance_pct)
         v = res["validation"]
-        print("PASS" if v["passed"] else "FAIL")
+        print("PASS" if v["passed"] else "FAIL")  # intentional stdout
         for e in v["errors"]:
-            print(f"ERROR: {e}")
+            print(f"ERROR: {e}")  # intentional stdout
         for w in v["warnings"]:
-            print(f"WARN:  {w}")
+            print(f"WARN:  {w}")  # intentional stdout
+        if args.strict and not v["passed"]:
+            sys.exit(1)
     elif args.all:
-        process_all(EXTRACTED_DIR, EXTRACTED_DIR, args.tolerance_pct)
+        summary = process_all(EXTRACTED_DIR, EXTRACTED_DIR, args.tolerance_pct, workers=args.workers)
+        if args.strict and summary["failed"] > 0:
+            sys.exit(1)
     else:
         parser.error(
             "Specify --single <filename.json> or --all. "

@@ -1,0 +1,24 @@
+{
+  "nodes": [
+    {"name": "Alpha Healthcare Group"},
+    {"name": "Growth"},
+    {"name": "Financing"},
+    {"name": "Working Capital"},
+    {"name": "Others"},
+    {"name": "R&D"},
+    {"name": "M&A"},
+    {"name": "Debt Repayment"},
+    {"name": "Operations"}
+  ],
+  "links": [
+    {"source": "Alpha Healthcare Group", "target": "Growth", "value": 200},
+    {"source": "Alpha Healthcare Group", "target": "Financing", "value": 150},
+    {"source": "Alpha Healthcare Group", "target": "Working Capital", "value": 100},
+    {"source": "Alpha Healthcare Group", "target": "Others", "value": 50},
+    {"source": "Growth", "target": "R&D", "value": 120},
+    {"source": "Growth", "target": "M&A", "value": 80},
+    {"source": "Financing", "target": "Debt Repayment", "value": 150},
+    {"source": "Working Capital", "target": "Operations", "value": 100}
+  ],
+  "total_net_proceeds": 500
+}

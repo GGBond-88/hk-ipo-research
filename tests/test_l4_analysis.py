@@ -1,7 +1,8 @@
-"""Tests for L4 analysis layer (src/hk_ipo/l4_analysis.py).
+"""Tests for L4 legacy analysis layer (src/hk_ipo/l4_legacy_analysis.py).
 
 Strategy:
-  - Write real .validated.json fixtures to tmp_path; call run_analysis directly.
+  - Write real .validated.json fixtures to tmp_path
+  call run_analysis directly.
   - No mocking.
   - Do NOT assert on pixel content of PNGs — only existence and non-empty size.
 """
@@ -11,10 +12,11 @@ from __future__ import annotations  # noqa: I001
 import json
 from pathlib import Path
 
-from hk_ipo.l4_analysis import run_analysis
+from hk_ipo.l4_legacy_analysis import run_analysis
 
 
 # ── Fixture helpers ───────────────────────────────────────────────────────────
+
 
 def _validated_record(
     ticker: str,
@@ -68,6 +70,7 @@ def _write(tmp_path: Path, stem: str, record: dict) -> Path:
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 class TestRunAnalysisZeroFiles:
     def test_zero_valid_files_returns_early_no_crash(self, tmp_path: Path):

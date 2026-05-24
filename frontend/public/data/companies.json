@@ -1,0 +1,71 @@
+{
+  "companies": [
+    {
+      "hk_ticker": "03750",
+      "company_name_en": "",
+      "listing_date": null,
+      "document_date": "2025-05-12",
+      "industry_primary": null,
+      "industry_source": null,
+      "total_net_proceeds": 30717.9,
+      "currency": "HKD",
+      "needs_human_review": false
+    },
+    {
+      "hk_ticker": "1187",
+      "company_name_en": "",
+      "listing_date": null,
+      "document_date": "2026-04-27",
+      "industry_primary": null,
+      "industry_source": null,
+      "total_net_proceeds": null,
+      "currency": "HKD",
+      "needs_human_review": true
+    },
+    {
+      "hk_ticker": "2698",
+      "company_name_en": "",
+      "listing_date": null,
+      "document_date": "2025-10-31",
+      "industry_primary": null,
+      "industry_source": null,
+      "total_net_proceeds": 2472.5,
+      "currency": "HKD",
+      "needs_human_review": true
+    },
+    {
+      "hk_ticker": "3690",
+      "company_name_en": "",
+      "listing_date": null,
+      "document_date": "2018-09-07",
+      "industry_primary": null,
+      "industry_source": null,
+      "total_net_proceeds": 4683.0,
+      "currency": "HKD",
+      "needs_human_review": false
+    },
+    {
+      "hk_ticker": "3750",
+      "company_name_en": "",
+      "listing_date": null,
+      "document_date": "2025-05-12",
+      "industry_primary": null,
+      "industry_source": null,
+      "total_net_proceeds": 40636.5,
+      "currency": "HKD",
+      "needs_human_review": false
+    },
+    {
+      "hk_ticker": "6871",
+      "company_name_en": "",
+      "listing_date": null,
+      "document_date": "2026-05-08",
+      "industry_primary": null,
+      "industry_source": null,
+      "total_net_proceeds": 67.3,
+      "currency": "HKD",
+      "needs_human_review": true
+    }
+  ],
+  "count": 6
+}

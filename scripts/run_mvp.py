@@ -1,6 +1,7 @@
 """MVP entry script: drive a single prospectus PDF through the L1→L2 pipeline.
 
-L3 (validation) and L4 (analysis) are not yet implemented; this script stubs
+L3 (validation) and L4 (analysis) are not yet implemented
+this script stubs
 them with informational prints so the script runs to completion.
 
 Usage:
@@ -18,7 +19,7 @@ from hk_ipo import config  # noqa: E402
 from hk_ipo.l1_sectioning import extract_use_of_proceeds  # noqa: E402
 from hk_ipo.l2_extraction import process_single  # noqa: E402
 from hk_ipo.l3_validation import validate_file  # noqa: E402
-from hk_ipo.l4_analysis import run_analysis  # noqa: E402
+from hk_ipo.l4_legacy_analysis import run_analysis  # noqa: E402
 
 
 def main(pdf_path: str) -> None:

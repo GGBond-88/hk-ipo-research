@@ -5,6 +5,18 @@
 data/raw_pdfs/*.pdf
 data/sections/
 data/extracted/
+data/l1_cache/
+data/llm_cache/
+
+# Pipeline outputs (derived from raw PDFs — regenerable)
+data/categorized/
+data/enriched/
+data/ipo.db
+data/logs/
+data/reports/
+
+# Local Claude Code config (per-user permissions)
+.claude/
 
 # Python
 __pycache__/
@@ -18,6 +30,16 @@ build/
 .venv/
 venv/
 env/
+
+# Node.js
+node_modules/
+
+# TypeScript composite build artifacts
+*.tsbuildinfo
+
+# Vite config build artifacts (from composite tsc -b)
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # Tools
 .ruff_cache/

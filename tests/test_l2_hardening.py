@@ -23,6 +23,7 @@ from hk_ipo.l2_extraction import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_section_json(tmp_path: Path, stem: str = "test_section") -> Path:
     """Write a minimal section JSON file to tmp_path."""
     data = {
@@ -80,6 +81,7 @@ def _make_extracted_json(tmp_path: Path, stem: str = "test_section") -> Path:
 
 
 # ── Test: 429 retry with Retry-After header ───────────────────────────────────
+
 
 class TestRateLimitRetry:
     def test_429_retry_sleeps_retry_after_value(self):
@@ -145,11 +147,13 @@ class TestRateLimitRetry:
     def test_max_retries_is_5_by_default(self):
         """Default max_retries for _run_with_retry must be 5."""
         import inspect
+
         sig = inspect.signature(_run_with_retry)
         assert sig.parameters["max_retries"].default == 5
 
 
 # ── Test: skip logic ──────────────────────────────────────────────────────────
+
 
 class TestSkipLogic:
     def test_process_single_skips_if_output_exists(self, tmp_path: Path):
@@ -227,6 +231,7 @@ class TestSkipLogic:
 
 # ── Test: extract_section ─────────────────────────────────────────────────────
 
+
 class TestExtractSection:
     """Tests for the new direct-LLM extract_section."""
 
@@ -288,18 +293,28 @@ class TestExtractSection:
         assert len(result["uses"]) == 1
         assert result["uses"][0]["use_id"] == "use_001"
         assert "validation_preview" in result
-        assert result.get("schema_version") == "1.0"
+        assert result.get("schema_version") == "2.0"
 
     def test_drops_items_with_no_financials(self):
         response = {
             "total_net_proceeds_hkd_million": 1000.0,
             "uses": [
-                {"category": "Working capital", "category_raw": "wc",
-                 "percentage": None, "amount_hkd_million": None,
-                 "description": "empty", "source_text": "..."},
-                {"category": "Working capital", "category_raw": "wc",
-                 "percentage": 100.0, "amount_hkd_million": 1000.0,
-                 "description": "real", "source_text": "Approximately 100%..."},
+                {
+                    "category": "Working capital",
+                    "category_raw": "wc",
+                    "percentage": None,
+                    "amount_hkd_million": None,
+                    "description": "empty",
+                    "source_text": "...",
+                },
+                {
+                    "category": "Working capital",
+                    "category_raw": "wc",
+                    "percentage": 100.0,
+                    "amount_hkd_million": 1000.0,
+                    "description": "real",
+                    "source_text": "Approximately 100%...",
+                },
             ],
         }
         with patch("hk_ipo.l2_extraction._call_llm", return_value=response):
@@ -315,8 +330,10 @@ class TestExtractSection:
             call_count += 1
             return self._llm_bad() if call_count == 1 else self._llm_ok()
 
-        with patch("hk_ipo.l2_extraction._call_llm", side_effect=fake_call_llm), \
-             patch("hk_ipo.l2_extraction._call_llm_with_prompt", side_effect=fake_call_llm):
+        with (
+            patch("hk_ipo.l2_extraction._call_llm", side_effect=fake_call_llm),
+            patch("hk_ipo.l2_extraction._call_llm_with_prompt", side_effect=fake_call_llm),
+        ):
             result = extract_section(self._section())
 
         assert call_count == 2
@@ -324,8 +341,10 @@ class TestExtractSection:
 
     def test_marks_needs_human_review_when_both_calls_fail(self):
         """Both calls fail L3 -> needs_human_review=True."""
-        with patch("hk_ipo.l2_extraction._call_llm", return_value=self._llm_bad()), \
-             patch("hk_ipo.l2_extraction._call_llm_with_prompt", return_value=self._llm_bad()):
+        with (
+            patch("hk_ipo.l2_extraction._call_llm", return_value=self._llm_bad()),
+            patch("hk_ipo.l2_extraction._call_llm_with_prompt", return_value=self._llm_bad()),
+        ):
             result = extract_section(self._section())
         assert result.get("needs_human_review") is True
 
@@ -344,6 +363,7 @@ class TestExtractSection:
 
 # ── Test: empty-response guard ────────────────────────────────────────────────
 
+
 class TestEmptyResponseGuard:
     """_call_llm and _call_llm_with_prompt must raise ValueError on empty content."""
 
@@ -359,10 +379,8 @@ class TestEmptyResponseGuard:
 
         from hk_ipo.l2_extraction import _call_llm
 
-        with patch(
-            "hk_ipo.l2_extraction._openai_client"
-        ) as mock_client:
-            mock_client.chat.completions.create.return_value = self._mock_response("")
+        with patch("hk_ipo.llm_client.LLMClient.chat") as mock_chat:
+            mock_chat.return_value = self._mock_response("")
             with pytest.raises(ValueError, match="empty response"):
                 _call_llm("some text")
 
@@ -371,10 +389,8 @@ class TestEmptyResponseGuard:
 
         from hk_ipo.l2_extraction import _call_llm_with_prompt
 
-        with patch(
-            "hk_ipo.l2_extraction._openai_client"
-        ) as mock_client:
-            mock_client.chat.completions.create.return_value = self._mock_response("   ")
+        with patch("hk_ipo.llm_client.LLMClient.chat") as mock_chat:
+            mock_chat.return_value = self._mock_response("   ")
             with pytest.raises(ValueError, match="empty response"):
                 _call_llm_with_prompt("some prompt")
 
@@ -393,16 +409,282 @@ class TestEmptyResponseGuard:
         }
         bad_response = {
             "total_net_proceeds_hkd_million": 1000.0,
-            "uses": [{"category": "Working capital", "category_raw": "wc",
-                       "percentage": 50.0, "amount_hkd_million": 500.0,
-                       "description": "wc", "source_text": "50%..."}],
+            "uses": [
+                {
+                    "category": "Working capital",
+                    "category_raw": "wc",
+                    "percentage": 50.0,
+                    "amount_hkd_million": 500.0,
+                    "description": "wc",
+                    "source_text": "50%...",
+                }
+            ],
         }
 
-        with patch("hk_ipo.l2_extraction._call_llm", return_value=bad_response), \
-             patch(
-                 "hk_ipo.l2_extraction._call_llm_with_prompt",
-                 side_effect=ValueError("LLM returned empty response (possible context overflow)"),
-             ):
+        with (
+            patch("hk_ipo.l2_extraction._call_llm", return_value=bad_response),
+            patch(
+                "hk_ipo.l2_extraction._call_llm_with_prompt",
+                side_effect=ValueError("LLM returned empty response (possible context overflow)"),
+            ),
+        ):
             result = extract_section(section)
 
         assert result.get("needs_human_review") is True
+
+
+# ── Task 005 — L2 v2 prompt changes ──────────────────────────────────────────
+
+
+def test_system_prompt_no_longer_lists_categories():
+    """The system prompt must NOT contain the old CATEGORY_L2 vocabulary list
+    because classification is now the responsibility of L4."""
+    from hk_ipo.l2_extraction import _SYSTEM_PROMPT
+
+    # The old prompt contained a specific category list instruction.
+    # The new prompt must not reference CATEGORY_L2 from schema.py.
+    assert "Manufacturing expansion" not in _SYSTEM_PROMPT
+    assert "Overseas expansion" not in _SYSTEM_PROMPT
+    assert "Working capital" not in _SYSTEM_PROMPT
+    assert "R&D and technology" not in _SYSTEM_PROMPT
+    # The new prompt still asks for category_raw
+    assert "category_raw" in _SYSTEM_PROMPT
+    # No longer references CATEGORY_L2 from schema
+    # _CATEGORY_LIST must not still echo old CATEGORY_L2 vocabulary
+    import hk_ipo.schema as s
+    from hk_ipo.l2_extraction import _CATEGORY_LIST
+
+    for cat in s.CATEGORY_L2:
+        assert cat not in _CATEGORY_LIST
+
+
+def test_parse_llm_output_always_emits_category_raw():
+    from hk_ipo.l2_extraction import _parse_llm_output
+
+    data = {
+        "uses": [
+            {
+                "category_raw": "research and development of core algorithms",
+                "percentage": 35.0,
+                "amount_hkd_million": 100.0,
+            }
+        ]
+    }
+    uses = _parse_llm_output(data, "test.pdf")
+    assert uses[0]["category_raw"] == "research and development of core algorithms"
+    assert "category" in uses[0]  # field present but may be None
+    # v2: parent_category/main_category/sub_category are emitted as None
+    assert uses[0]["parent_category"] is None
+    assert uses[0]["main_category"] is None
+    assert uses[0]["sub_category"] is None
+
+
+def test_build_result_includes_schema_version():
+    from hk_ipo.l2_extraction import _build_result
+    from hk_ipo.schema import SCHEMA_VERSION
+
+    result = _build_result("test.pdf", "01234", "2024-06-30", 1000.0, [])
+    assert result["schema_version"] == SCHEMA_VERSION
+
+
+def test_extract_section_output_has_schema_version(tmp_path):
+    """End-to-end mock: extract_section output includes schema_version."""
+    from unittest.mock import patch
+
+    from hk_ipo.l2_extraction import extract_section
+
+    section_data = {
+        "company_file": "01234.pdf",
+        "hk_ticker": "01234",
+        "document_date": "2024-06-30",
+        "section_title": "USE OF PROCEEDS",
+        "start_page": 1,
+        "end_page": 3,
+        "text": (
+            "We estimate net proceeds of approximately HK$1,000 million.\n\n"
+            "- Approximately 100% or HK$1,000 million for research.\n"
+        ),
+        "tables": [],
+        "extraction_method": "toc",
+    }
+    fake_llm_output = {
+        "total_net_proceeds_hkd_million": 1000.0,
+        "uses": [
+            {
+                "category_raw": "research",
+                "percentage": 100.0,
+                "amount_hkd_million": 1000.0,
+                "description": "Research.",
+                "source_text": "Approximately 100%...",
+            }
+        ],
+    }
+    fake_v = (True, [], [])  # L3 validation passes
+
+    with (
+        patch("hk_ipo.l2_extraction._call_llm", return_value=fake_llm_output),
+        patch("hk_ipo.l3_validation.validate_record", return_value=fake_v),
+    ):
+        result = extract_section(section_data)
+    assert result["schema_version"] is not None
+    for u in result["uses"]:
+        assert "category_raw" in u
+
+
+# ── Task 005 — self-correction retry verification (A2.3) ──────────────────────
+
+
+def test_extract_section_self_correction_triggers_when_l3_fails():
+    """When validate_record reports a sum violation, extract_section must retry
+    the LLM exactly once with a CORRECTION NEEDED prompt, per spec A2.3."""
+    from unittest.mock import patch
+
+    from hk_ipo.l2_extraction import extract_section
+
+    section_data = {
+        "company_file": "01234.pdf",
+        "hk_ticker": "01234",
+        "document_date": "2024-06-30",
+        "section_title": "USE OF PROCEEDS",
+        "start_page": 1,
+        "end_page": 3,
+        "text": "Net proceeds HK$1,000 million.\n- 100% or HK$1,000 million for research.\n",
+        "tables": [],
+        "extraction_method": "toc",
+    }
+
+    # First LLM call: returns incomplete data that fails validation
+    call_count = 0
+
+    def fake_call_llm(text_arg):
+        nonlocal call_count
+        call_count += 1
+        return {
+            "total_net_proceeds_hkd_million": 1000.0,
+            "uses": [
+                {
+                    "category_raw": "research",
+                    "percentage": 50.0,  # only 50% -- will fail percentage_sum
+                    "amount_hkd_million": 500.0,
+                    "description": "Research.",
+                    "source_text": "Source text...",
+                }
+            ],
+        }
+
+    with (
+        patch("hk_ipo.l2_extraction._call_llm", side_effect=fake_call_llm),
+        patch(
+            "hk_ipo.l2_extraction._call_llm_with_prompt",
+            return_value={
+                "total_net_proceeds_hkd_million": 1000.0,
+                "uses": [
+                    {
+                        "category_raw": "research",
+                        "percentage": 100.0,
+                        "amount_hkd_million": 1000.0,
+                        "description": "Research.",
+                        "source_text": "Source...",
+                    }
+                ],
+            },
+        ),
+        patch("hk_ipo.l2_extraction.validate_extraction"),
+    ):
+        result = extract_section(section_data)
+
+    # The self-correction path calls _call_llm first, then _call_llm_with_prompt
+    assert call_count == 1  # first call was made
+    # After correction passes L3, needs_human_review should NOT be set
+    assert not result.get("needs_human_review", False)
+
+
+def test_extract_section_sets_needs_human_review_when_correction_also_fails():
+    """When self-correction still fails L3 validation, record must be flagged
+    needs_human_review = True and stored as-is (spec A2.3)."""
+    from unittest.mock import patch
+
+    from hk_ipo.l2_extraction import extract_section
+
+    section_data = {
+        "company_file": "01234.pdf",
+        "hk_ticker": "01234",
+        "document_date": "2024-06-30",
+        "section_title": "USE OF PROCEEDS",
+        "start_page": 1,
+        "end_page": 3,
+        "text": "Net proceeds HK$1,000 million.\n- about half of proceeds for R&D.\n",
+        "tables": [],
+        "extraction_method": "toc",
+    }
+
+    failing_response = {
+        "total_net_proceeds_hkd_million": 1000.0,
+        "uses": [
+            {
+                "category_raw": "research",
+                "percentage": 45.0,  # still incorrect
+                "amount_hkd_million": 450.0,
+                "description": "R&D.",
+                "source_text": "Source...",
+            }
+        ],
+    }
+
+    with (
+        patch("hk_ipo.l2_extraction._call_llm", return_value=failing_response),
+        patch("hk_ipo.l2_extraction._call_llm_with_prompt", return_value=failing_response),
+        patch("hk_ipo.l2_extraction.validate_extraction"),
+    ):
+        result = extract_section(section_data)
+
+    assert result.get("needs_human_review") is True
+
+
+def test_extract_section_self_correction_runs_at_most_once():
+    """Spec A2.3: 'runs at most once'. Even if the first correction fails,
+    there must be no second correction attempt."""
+    from unittest.mock import patch
+
+    from hk_ipo.l2_extraction import extract_section
+
+    section_data = {
+        "company_file": "01234.pdf",
+        "hk_ticker": "01234",
+        "document_date": "2024-06-30",
+        "section_title": "USE OF PROCEEDS",
+        "start_page": 1,
+        "end_page": 3,
+        "text": "Net proceeds HK$1,000 million.\n- about half for R&D.\n",
+        "tables": [],
+        "extraction_method": "toc",
+    }
+
+    correction_call_count = 0
+    failing_response = {
+        "total_net_proceeds_hkd_million": 1000.0,
+        "uses": [
+            {
+                "category_raw": "r&d",
+                "percentage": 30.0,
+                "amount_hkd_million": 300.0,
+                "description": "R&D.",
+                "source_text": "...",
+            }
+        ],
+    }
+
+    def fake_correction(_prompt):
+        nonlocal correction_call_count
+        correction_call_count += 1
+        return failing_response
+
+    with (
+        patch("hk_ipo.l2_extraction._call_llm", return_value=failing_response),
+        patch("hk_ipo.l2_extraction._call_llm_with_prompt", side_effect=fake_correction),
+        patch("hk_ipo.l2_extraction.validate_extraction"),
+    ):
+        extract_section(section_data)
+
+    # Self-correction runs at most once
+    assert correction_call_count == 1

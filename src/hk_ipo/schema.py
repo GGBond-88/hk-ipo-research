@@ -1,24 +1,27 @@
 """Single source of truth for HK IPO Research schema definitions.
 
-Assumptions:
-  - pydantic v2 is used (model_validate, not parse_obj)
-  - category field on UseItem is Optional[str] with a validator that checks
-    membership in CATEGORY_L2 when not None and category_proposed is not set
+v2.0 changes
+------------
+- SCHEMA_VERSION bumped from "1.0" to "2.0".
+- UseItem gains `parent_category`, `main_category`, `sub_category` (set by L4).
+- ExtractionRecord gains `language` ('en' | 'zh' | 'mixed') and `schema_version`.
+- Legacy `CATEGORY_L2`, `CATEGORY_L1_TREE`, `CATEGORY_L1_MAP` are PRESERVED for
+  backwards compatibility with `l4_legacy_analysis.py` and existing tests.
+  New code should import from `hk_ipo.taxonomy` instead.
 """
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 # ── Version ───────────────────────────────────────────────────────────────────
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 
-# ── Level-1 and Level-2 category definitions ──────────────────────────────────
+# ── Legacy category definitions (DO NOT EXTEND — use hk_ipo.taxonomy) ────────
 
-# Exactly 4 L1 categories, each with fixed sub-categories (L2).
 CATEGORY_L1_TREE: dict[str, list[str]] = {
     "Growth & Expansion": [
         "Overseas expansion",
@@ -38,29 +41,12 @@ CATEGORY_L1_TREE: dict[str, list[str]] = {
     ],
 }
 
-# Flat list of all Level-2 category strings (8 total).
-CATEGORY_L2: list[str] = [
-    sub for subs in CATEGORY_L1_TREE.values() for sub in subs
-]
+CATEGORY_L2: list[str] = [sub for subs in CATEGORY_L1_TREE.values() for sub in subs]
 
-# Dict mapping each L2 label → its L1 parent label.
-CATEGORY_L1_MAP: dict[str, str] = {
-    sub: l1
-    for l1, subs in CATEGORY_L1_TREE.items()
-    for sub in subs
-}
-
-# ── Cross-cutting tag type aliases (structural, not runtime-enforced) ─────────
-# These are plain type aliases to document intent. Validation is handled by
-# Pydantic models below where applicable.
-
-# GeoScope: Literal["domestic", "overseas", "both"]
-# GeoTargets: list[str]  — free-form country/region names
-# TargetIndustries: list[str]
-# HeadcountPlan: Optional[int]
-# AssetType: Optional[str]
+CATEGORY_L1_MAP: dict[str, str] = {sub: l1 for l1, subs in CATEGORY_L1_TREE.items() for sub in subs}
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
+
 
 class SectionRecord(BaseModel):
     """Fields produced by L1 sectioning output."""
@@ -74,30 +60,45 @@ class SectionRecord(BaseModel):
     text: str
     tables: list[Any] = []
     extraction_method: str
+    # v2 fields
+    language: Optional[str] = None
+    skipped: bool = False
 
 
 class UseItem(BaseModel):
-    """A single use-of-proceeds line item extracted by L2."""
+    """A single use-of-proceeds line item.
+
+    v2 fields:
+      parent_category  — closed Parent vocabulary (see hk_ipo.taxonomy)
+      main_category    — closed Main vocabulary under parent_category
+      sub_category     — semi-open Sub vocabulary
+      None or a free-form label
+    """
+
+    model_config = ConfigDict(extra="allow")  # tolerate transient fields
 
     use_id: str
     parent_id: Optional[str] = None
-    # category must be in CATEGORY_L2 when not None AND category_proposed is absent.
-    # When category_proposed is set, category may be the closest-match label OR None.
+    # legacy fields
     category: Optional[str] = None
     category_proposed: Optional[str] = None
     category_raw: str = ""
+    # v2 hierarchy fields
+    parent_category: Optional[str] = None
+    main_category: Optional[str] = None
+    sub_category: Optional[str] = None
+    # numerics
     amount_hkd_million: Optional[float] = None
     percentage: Optional[float] = None
     description: str = ""
     source_text: str = ""
 
     @model_validator(mode="after")
-    def validate_category_membership(self) -> "UseItem":
-        """Enforce CATEGORY_L2 membership when category is set.
+    def validate_legacy_category_membership(self) -> "UseItem":
+        """Preserve the legacy CATEGORY_L2 check for backwards compatibility.
 
-        Skips the check when category_proposed is also set (intentional
-        'no match' items where the LLM used the closest standard label
-        alongside a free-form proposed label).
+        New v2 pipeline does not set `category`, so the check is effectively
+        a no-op for new records.
         """
         if self.category is not None and self.category_proposed is None:
             if self.category not in CATEGORY_L2:
@@ -112,6 +113,8 @@ class UseItem(BaseModel):
 class ExtractionRecord(BaseModel):
     """Full L2 extraction output for one prospectus section."""
 
+    model_config = ConfigDict(extra="allow")
+
     company_file: str
     section_source: Optional[str] = None
     hk_ticker: Optional[str] = None
@@ -122,13 +125,14 @@ class ExtractionRecord(BaseModel):
     currency: str = "HKD"
     uses: list[UseItem] = []
     validation_preview: Optional[dict[str, Any]] = None
+    # v2 fields
+    schema_version: Optional[str] = None
+    language: Optional[str] = None
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
-def validate_extraction(data: dict[str, Any]) -> ExtractionRecord:
-    """Validate a raw extraction dict against ExtractionRecord schema.
 
-    Raises pydantic.ValidationError if the data does not conform.
-    """
+def validate_extraction(data: dict[str, Any]) -> ExtractionRecord:
+    """Validate a raw extraction dict against ExtractionRecord schema."""
     return ExtractionRecord.model_validate(data)

@@ -1,10 +1,6 @@
-"""L4 分析层：汇总多份招股书的 L3 校验结果，执行跨公司统计分析，
-生成可视化报告（图表 + CSV 摘要）写入 data/reports/。
-
-典型分析维度：
-  - 各行业资金用途分布（研发 / 营销 / 运营 / 补充流动资金等）
-  - 募资规模 vs 用途结构相关性
-  - 时序趋势（按 IPO 日期）
+"""L4 LEGACY analysis (matplotlib). Retired in v2.0 — kept only so existing
+tests stay green. New L4 (hierarchical categorization) lives in
+`src/hk_ipo/l4_categorize.py` and is built in Task 008.
 """
 
 from __future__ import annotations  # noqa: I001
@@ -14,11 +10,15 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")  # headless — must be called before matplotlib.pyplot is imported
 import matplotlib.pyplot as plt  # noqa: I001
 import pandas as pd  # noqa: I001
 
+from hk_ipo.logging_setup import get_logger
 from hk_ipo.schema import CATEGORY_L1_MAP, CATEGORY_L1_TREE  # noqa: I001
+
+logger = get_logger(__name__)
 
 
 # All L1 category names, in a stable order derived from schema
@@ -34,19 +34,18 @@ def _load_validated_files(extracted_dir: str) -> tuple[list[dict[str, Any]], int
     for fp in sorted(dirpath.glob("*.validated.json")):
         try:
             data = json.loads(fp.read_text(encoding="utf-8"))
-        except Exception as exc:
-            print(f"[WARN] Could not read {fp.name}: {exc} — skipping")
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Could not read %s: %s — skipping", fp.name, exc)
             skipped += 1
             continue
 
         validation = data.get("validation", {})
         if not validation.get("passed", False):
             reasons = validation.get("errors", [])
-            print(
-                f"[SKIP] {fp.name}: validation.passed=False "
-                f"({len(reasons)} error(s): "
-                f"{'; '.join(reasons[:2])}"
-                f"{'…' if len(reasons) > 2 else ''})"
+            logger.info(
+                "[SKIP] %s: validation.passed=False (%s error(s): %s%s)",
+                fp.name, len(reasons), "; ".join(reasons[:2]),
+                "…" if len(reasons) > 2 else "",
             )
             skipped += 1
             continue
@@ -66,26 +65,38 @@ def _build_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
         for u in uses:
             cat_l2 = u.get("category")
             cat_l1 = CATEGORY_L1_MAP.get(cat_l2, "Unknown") if cat_l2 else "Unknown"
-            rows.append({
-                "ticker": ticker,
-                "document_date": doc_date,
-                "category_l1": cat_l1,
-                "category_l2": cat_l2,
-                "percentage": u.get("percentage"),
-                "amount_hkd_million": u.get("amount_hkd_million"),
-                "is_top_level": u.get("parent_id") is None,
-                "geo_scope": u.get("geo_scope"),
-                "target_industries": u.get("target_industries"),
-                "asset_type": u.get("asset_type"),
-                "headcount_plan": u.get("headcount_plan"),
-            })
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "document_date": doc_date,
+                    "category_l1": cat_l1,
+                    "category_l2": cat_l2,
+                    "percentage": u.get("percentage"),
+                    "amount_hkd_million": u.get("amount_hkd_million"),
+                    "is_top_level": u.get("parent_id") is None,
+                    "geo_scope": u.get("geo_scope"),
+                    "target_industries": u.get("target_industries"),
+                    "asset_type": u.get("asset_type"),
+                    "headcount_plan": u.get("headcount_plan"),
+                }
+            )
 
     if not rows:
-        return pd.DataFrame(columns=[
-            "ticker", "document_date", "category_l1", "category_l2",
-            "percentage", "amount_hkd_million", "is_top_level",
-            "geo_scope", "target_industries", "asset_type", "headcount_plan",
-        ])
+        return pd.DataFrame(
+            columns=[
+                "ticker",
+                "document_date",
+                "category_l1",
+                "category_l2",
+                "percentage",
+                "amount_hkd_million",
+                "is_top_level",
+                "geo_scope",
+                "target_industries",
+                "asset_type",
+                "headcount_plan",
+            ]
+        )
 
     df = pd.DataFrame(rows)
     # Convert numeric columns
@@ -99,7 +110,7 @@ def _plot_allocation_by_l1(df: pd.DataFrame, reports_dir: Path) -> None:
     top = df[df["is_top_level"]].copy()
     agg = top.groupby("category_l1")["percentage"].mean().reindex(_L1_CATEGORIES).dropna()
     if agg.empty:
-        print("[L4] No percentage data for allocation_by_l1.png — skipping chart")
+        logger.warning("No percentage data for allocation_by_l1.png — skipping chart")
         return
 
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -122,7 +133,7 @@ def _plot_allocation_by_company_l1(df: pd.DataFrame, reports_dir: Path) -> None:
         .reindex(columns=_L1_CATEGORIES, fill_value=0)
     )
     if pivot.empty:
-        print("[L4] No data for allocation_by_company_l1.png — skipping chart")
+        logger.warning("No data for allocation_by_company_l1.png — skipping chart")
         return
 
     fig, ax = plt.subplots(figsize=(max(6, len(pivot) * 1.5), 5))
@@ -153,15 +164,10 @@ def _plot_timeseries_l1(
     distinct_dates = top["document_date"].nunique()
 
     if distinct_dates < 2:
-        print(
-            f"[L4] Skipping timeseries_l1.png: only {distinct_dates} distinct date(s) "
-            "(need 2+)"
-        )
+        logger.warning("Skipping timeseries_l1.png: only %s distinct date(s) (need 2+)", distinct_dates)
         return False
     if n_tickers < 2:
-        print(
-            f"[L4] Skipping timeseries_l1.png: only {n_tickers} ticker(s) (need 2+)"
-        )
+        logger.warning("Skipping timeseries_l1.png: only %s ticker(s) (need 2+)", n_tickers)
         return False
 
     pivot = (
@@ -257,6 +263,7 @@ def run_analysis(extracted_dir: str, reports_dir: str | None = None) -> None:
     """
     if reports_dir is None:
         from hk_ipo import config
+
         _reports_dir = config.REPORTS_DIR
     else:
         _reports_dir = Path(reports_dir)
@@ -266,17 +273,14 @@ def run_analysis(extracted_dir: str, reports_dir: str | None = None) -> None:
     records, skipped = _load_validated_files(extracted_dir)
     n_companies = len(records)
 
-    print(
-        f"[L4] Loaded {n_companies} valid record(s), skipped {skipped} "
-        f"(failed validation or unreadable)"
-    )
+    logger.info("Loaded %s valid record(s), skipped %s (failed validation or unreadable)", n_companies, skipped)
 
     if n_companies == 0:
-        print("[L4] No valid files to analyse — exiting early.")
+        logger.warning("No valid files to analyse — exiting early.")
         return
 
     df = _build_dataframe(records)
-    print(f"[L4] DataFrame: {len(df)} rows, {len(df.columns)} columns")
+    logger.info("DataFrame: %s rows, %s columns", len(df), len(df.columns))
 
     # ── CSVs ─────────────────────────────────────────────────────────────────
     df.to_csv(_reports_dir / "uses_by_company.csv", index=False)
@@ -289,15 +293,15 @@ def run_analysis(extracted_dir: str, reports_dir: str | None = None) -> None:
     )
     agg_l1.to_csv(_reports_dir / "allocation_by_l1.csv", index=False)
 
-    print(f"[L4] CSVs written to {_reports_dir}")
+    logger.info("CSVs written to %s", _reports_dir)
 
     # ── Charts ────────────────────────────────────────────────────────────────
     _plot_allocation_by_l1(df, _reports_dir)
     _plot_allocation_by_company_l1(df, _reports_dir)
     timeseries_produced = _plot_timeseries_l1(df, _reports_dir, n_tickers=n_companies)
 
-    print(f"[L4] Charts written to {_reports_dir}")
+    logger.info("Charts written to %s", _reports_dir)
 
     # ── Summary markdown ──────────────────────────────────────────────────────
     _write_summary_md(_reports_dir, df, n_companies, timeseries_produced)
-    print(f"[L4] Summary written to {_reports_dir / 'summary.md'}")
+    logger.info("Summary written to %s", _reports_dir / "summary.md")

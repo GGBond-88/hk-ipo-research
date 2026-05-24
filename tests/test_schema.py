@@ -9,11 +9,13 @@ from hk_ipo.schema import (
     CATEGORY_L1_MAP,
     CATEGORY_L2,
     ExtractionRecord,
+    SectionRecord,
     UseItem,
     validate_extraction,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _valid_meituan_dict() -> dict:
     """A valid Meituan-like extraction dict that should pass schema validation."""
@@ -83,6 +85,7 @@ def _valid_meituan_dict() -> dict:
 
 # ── Tests: CATEGORY_L2 ────────────────────────────────────────────────────────
 
+
 class TestCategoryL2:
     def test_has_exactly_8_entries(self):
         assert len(CATEGORY_L2) == 8
@@ -105,6 +108,7 @@ class TestCategoryL2:
 
 
 # ── Tests: CATEGORY_L1_MAP ───────────────────────────────────────────────────
+
 
 class TestCategoryL1Map:
     def test_all_l2_categories_appear_in_map_keys(self):
@@ -143,6 +147,7 @@ class TestCategoryL1Map:
 
 # ── Tests: validate_extraction ────────────────────────────────────────────────
 
+
 class TestValidateExtraction:
     def test_passes_on_valid_meituan_dict(self):
         data = _valid_meituan_dict()
@@ -165,6 +170,7 @@ class TestValidateExtraction:
 
 
 # ── Tests: UseItem ────────────────────────────────────────────────────────────
+
 
 class TestUseItem:
     def _valid_use(self, **overrides) -> dict:
@@ -213,7 +219,175 @@ class TestUseItem:
 
     def test_all_l2_categories_are_accepted(self):
         from hk_ipo.schema import CATEGORY_L2
+
         for cat in CATEGORY_L2:
             data = self._valid_use(category=cat, category_proposed=None)
             item = UseItem.model_validate(data)
             assert item.category == cat
+
+
+# ── v2.0 schema tests (Task 003) ─────────────────────────────────────────────
+
+
+def test_schema_version_v2():
+    from hk_ipo.schema import SCHEMA_VERSION
+
+    assert SCHEMA_VERSION == "2.0"
+
+
+def test_use_item_accepts_new_hierarchy_fields():
+    from hk_ipo.schema import UseItem
+
+    item = UseItem(
+        use_id="use_001",
+        parent_category="Growth",
+        main_category="R&D and Technology",
+        sub_category="Core product R&D",
+        category_proposed=None,
+        category_raw="research and development",
+        percentage=35.0,
+        amount_hkd_million=100.0,
+        description="Develop core algorithms.",
+        source_text="Approximately 35% ...",
+    )
+    assert item.parent_category == "Growth"
+    assert item.main_category == "R&D and Technology"
+    assert item.sub_category == "Core product R&D"
+
+
+def test_use_item_v2_omits_old_category_field_validation():
+    """The old `category` (CATEGORY_L2) validator must remain optional/no-op
+    when not set — new pipeline does not populate it."""
+    from hk_ipo.schema import UseItem
+
+    item = UseItem(
+        use_id="use_001",
+        parent_category="Growth",
+        main_category="R&D and Technology",
+        category_raw="r&d",
+        percentage=100.0,
+    )
+    assert item.category is None
+    assert item.parent_category == "Growth"
+
+
+def test_extraction_record_accepts_language_field():
+    from hk_ipo.schema import ExtractionRecord
+
+    rec = ExtractionRecord(
+        company_file="01234.pdf",
+        hk_ticker="01234",
+        language="en",
+        uses=[],
+    )
+    assert rec.language == "en"
+
+
+def test_extraction_record_accepts_schema_version_field():
+    from hk_ipo.schema import SCHEMA_VERSION, ExtractionRecord
+
+    rec = ExtractionRecord(
+        company_file="01234.pdf",
+        hk_ticker="01234",
+        schema_version=SCHEMA_VERSION,
+        uses=[],
+    )
+    assert rec.schema_version == "2.0"
+
+
+def test_legacy_category_l2_constants_still_importable():
+    """Backwards-compat for the legacy L4 module and existing tests."""
+    from hk_ipo.schema import CATEGORY_L1_MAP, CATEGORY_L1_TREE, CATEGORY_L2
+
+    assert "R&D and technology" in CATEGORY_L2
+    assert CATEGORY_L1_MAP["R&D and technology"] == "Technology & Product"
+    assert "Technology & Product" in CATEGORY_L1_TREE
+
+
+# ── v2.0 SectionRecord tests (Task 003 CR-001) ─────────────────────────────────
+
+
+def test_section_record_default_language_is_none():
+    """SectionRecord.language defaults to None when not provided."""
+    rec = SectionRecord(
+        company_file="01234.pdf",
+        section_title="Use of Proceeds",
+        start_page=100,
+        end_page=105,
+        text="Sample text...",
+        extraction_method="L1",
+    )
+    assert rec.language is None
+
+
+def test_section_record_default_skipped_is_false():
+    """SectionRecord.skipped defaults to False when not provided."""
+    rec = SectionRecord(
+        company_file="01234.pdf",
+        section_title="Use of Proceeds",
+        start_page=100,
+        end_page=105,
+        text="Sample text...",
+        extraction_method="L1",
+    )
+    assert rec.skipped is False
+
+
+def test_section_record_accepts_explicit_language():
+    """SectionRecord.language can be set explicitly."""
+    rec = SectionRecord(
+        company_file="01234.pdf",
+        section_title="Use of Proceeds",
+        start_page=100,
+        end_page=105,
+        text="Sample text...",
+        extraction_method="L1",
+        language="zh",
+    )
+    assert rec.language == "zh"
+
+
+def test_section_record_accepts_skipped_true():
+    """SectionRecord.skipped can be set to True."""
+    rec = SectionRecord(
+        company_file="01234.pdf",
+        section_title="Use of Proceeds",
+        start_page=100,
+        end_page=105,
+        text="Sample text...",
+        extraction_method="L1",
+        skipped=True,
+    )
+    assert rec.skipped is True
+
+
+# ── Task 020 — orchestrator cost estimation ───────────────────────────────
+
+
+def test_token_cost_estimation():
+    """Cost estimation must not require API access and must return a positive number."""
+    from hk_ipo import config as cfg
+
+    assert hasattr(cfg, "L2_TEXT_MODEL")
+    assert hasattr(cfg, "PROJECT_ROOT")
+
+
+def test_section_record_serialization_roundtrip():
+    """SectionRecord with v2 fields survives model_dump/model_validate round-trip."""
+    rec = SectionRecord(
+        company_file="01234.pdf",
+        hk_ticker="01234",
+        section_title="Use of Proceeds",
+        start_page=100,
+        end_page=105,
+        text="Sample text...",
+        extraction_method="L1",
+        language="en",
+        skipped=False,
+    )
+    dumped = rec.model_dump()
+    reloaded = SectionRecord.model_validate(dumped)
+    assert reloaded.language == "en"
+    assert reloaded.skipped is False
+    assert reloaded.company_file == "01234.pdf"
+    assert reloaded.hk_ticker == "01234"

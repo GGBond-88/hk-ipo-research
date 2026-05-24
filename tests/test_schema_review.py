@@ -9,6 +9,7 @@ from hk_ipo.schema_review import _scan_dir, generate_report
 
 # ── Tests: empty directory ────────────────────────────────────────────────────
 
+
 class TestEmptyDirectory:
     def test_report_runs_without_crashing_on_empty_dir(self, tmp_path: Path):
         """generate_report on an empty directory must not raise."""
@@ -32,6 +33,7 @@ class TestEmptyDirectory:
 
 
 # ── Tests: files with category_proposed values ────────────────────────────────
+
 
 def _write_extracted(tmp_path: Path, stem: str, uses: list[dict]) -> Path:
     """Write a minimal extracted JSON file to tmp_path."""
@@ -71,10 +73,19 @@ class TestCategoryProposedDetection:
 
     def test_skips_validated_and_error_files(self, tmp_path: Path):
         """Files matching *.validated.json and *.error.json must be skipped."""
-        uses = [{"use_id": "use_001", "parent_id": None, "category": "Working capital",
-                 "category_proposed": "something", "category_raw": "x",
-                 "amount_hkd_million": 100.0, "percentage": 10.0,
-                 "description": "x", "source_text": "x"}]
+        uses = [
+            {
+                "use_id": "use_001",
+                "parent_id": None,
+                "category": "Working capital",
+                "category_proposed": "something",
+                "category_raw": "x",
+                "amount_hkd_million": 100.0,
+                "percentage": 10.0,
+                "description": "x",
+                "source_text": "x",
+            }
+        ]
         data = {
             "company_file": "x.pdf",
             "hk_ticker": "1234",
@@ -84,12 +95,8 @@ class TestCategoryProposedDetection:
             "uses": uses,
         }
         # Write as validated and error variants — these should be skipped
-        (tmp_path / "company_a.validated.json").write_text(
-            json.dumps(data), encoding="utf-8"
-        )
-        (tmp_path / "company_a.error.json").write_text(
-            json.dumps(data), encoding="utf-8"
-        )
+        (tmp_path / "company_a.validated.json").write_text(json.dumps(data), encoding="utf-8")
+        (tmp_path / "company_a.error.json").write_text(json.dumps(data), encoding="utf-8")
         result = _scan_dir(tmp_path)
         assert result["files_scanned"] == 0
         assert result["uses_with_proposed"] == 0
@@ -97,20 +104,28 @@ class TestCategoryProposedDetection:
     def test_aggregates_across_multiple_files(self, tmp_path: Path):
         uses_a = [
             {
-                "use_id": "use_001", "parent_id": None,
+                "use_id": "use_001",
+                "parent_id": None,
                 "category": "Working capital",
                 "category_proposed": "Environmental compliance costs",
-                "category_raw": "env costs", "amount_hkd_million": 100.0,
-                "percentage": 10.0, "description": "Env.", "source_text": "~10%",
+                "category_raw": "env costs",
+                "amount_hkd_million": 100.0,
+                "percentage": 10.0,
+                "description": "Env.",
+                "source_text": "~10%",
             }
         ]
         uses_b = [
             {
-                "use_id": "use_001", "parent_id": None,
+                "use_id": "use_001",
+                "parent_id": None,
                 "category": "Working capital",
                 "category_proposed": "Environmental compliance costs",
-                "category_raw": "env costs", "amount_hkd_million": 200.0,
-                "percentage": 20.0, "description": "Env.", "source_text": "~20%",
+                "category_raw": "env costs",
+                "amount_hkd_million": 200.0,
+                "percentage": 20.0,
+                "description": "Env.",
+                "source_text": "~20%",
             }
         ]
         _write_extracted(tmp_path, "company_a", uses_a)
@@ -124,20 +139,28 @@ class TestCategoryProposedDetection:
         """When the same proposed value appears in ≥2 files, the report recommends promotion."""
         uses_a = [
             {
-                "use_id": "use_001", "parent_id": None,
+                "use_id": "use_001",
+                "parent_id": None,
                 "category": "Working capital",
                 "category_proposed": "Environmental compliance costs",
-                "category_raw": "env costs", "amount_hkd_million": 100.0,
-                "percentage": 10.0, "description": "Env.", "source_text": "~10%",
+                "category_raw": "env costs",
+                "amount_hkd_million": 100.0,
+                "percentage": 10.0,
+                "description": "Env.",
+                "source_text": "~10%",
             }
         ]
         uses_b = [
             {
-                "use_id": "use_001", "parent_id": None,
+                "use_id": "use_001",
+                "parent_id": None,
                 "category": "Working capital",
                 "category_proposed": "Environmental compliance costs",
-                "category_raw": "env costs", "amount_hkd_million": 200.0,
-                "percentage": 20.0, "description": "Env.", "source_text": "~20%",
+                "category_raw": "env costs",
+                "amount_hkd_million": 200.0,
+                "percentage": 20.0,
+                "description": "Env.",
+                "source_text": "~20%",
             }
         ]
         _write_extracted(tmp_path, "company_a", uses_a)
@@ -150,11 +173,15 @@ class TestCategoryProposedDetection:
         """When a proposed value appears only in 1 file, no promotion recommendation."""
         uses = [
             {
-                "use_id": "use_001", "parent_id": None,
+                "use_id": "use_001",
+                "parent_id": None,
                 "category": "Working capital",
                 "category_proposed": "Very unique purpose",
-                "category_raw": "unique", "amount_hkd_million": 100.0,
-                "percentage": 10.0, "description": "Unique.", "source_text": "~10%",
+                "category_raw": "unique",
+                "amount_hkd_million": 100.0,
+                "percentage": 10.0,
+                "description": "Unique.",
+                "source_text": "~10%",
             }
         ]
         _write_extracted(tmp_path, "company_a", uses)
@@ -166,19 +193,28 @@ class TestCategoryProposedDetection:
     def test_report_counts_correct_files_and_uses(self, tmp_path: Path):
         uses_no_proposed = [
             {
-                "use_id": "use_001", "parent_id": None,
-                "category": "Working capital", "category_proposed": None,
-                "category_raw": "wc", "amount_hkd_million": 100.0,
-                "percentage": 10.0, "description": "WC.", "source_text": "~10%",
+                "use_id": "use_001",
+                "parent_id": None,
+                "category": "Working capital",
+                "category_proposed": None,
+                "category_raw": "wc",
+                "amount_hkd_million": 100.0,
+                "percentage": 10.0,
+                "description": "WC.",
+                "source_text": "~10%",
             }
         ]
         uses_with_proposed = [
             {
-                "use_id": "use_001", "parent_id": None,
+                "use_id": "use_001",
+                "parent_id": None,
                 "category": "Working capital",
                 "category_proposed": "Novel purpose",
-                "category_raw": "novel", "amount_hkd_million": 200.0,
-                "percentage": 20.0, "description": "Novel.", "source_text": "~20%",
+                "category_raw": "novel",
+                "amount_hkd_million": 200.0,
+                "percentage": 20.0,
+                "description": "Novel.",
+                "source_text": "~20%",
             }
         ]
         _write_extracted(tmp_path, "company_a", uses_no_proposed)

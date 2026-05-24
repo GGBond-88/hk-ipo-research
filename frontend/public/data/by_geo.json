@@ -1,0 +1,14 @@
+{
+  "domestic_hk": {
+    "total_hkd_million": 36445.6,
+    "companies": 4
+  },
+  "mainland": {
+    "total_hkd_million": 188.4,
+    "companies": 1
+  },
+  "overseas": {
+    "total_hkd_million": 59811.4,
+    "companies": 5
+  }
+}

@@ -1,0 +1,39 @@
+/superpowers:brainstorming
+
+## 需求：HKEX IPO 招股书自动下载器（L0）
+
+### 背景
+我有一个已完成spec的数据管道（L1-L7），用于从港交所招股书PDF中提取"Use of Proceeds"数据并分析。现在需要补上L0——自动从HKEXnews.hk下载招股书PDF。
+
+### 目标
+构建一个CLI工具，自动从港交所披露易下载所有IPO招股书PDF到 `data/raw_pdfs/`，作为现有管道的输入。
+
+### 范围
+- 时间范围：2010-2026年（约2000-2500份IPO）
+- 目标文档：仅主板+GEM的IPO招股书（Global Offering / Prospectus），不需要年报/中期报告等其他文件
+- 输出：PDF文件存入 `data/raw_pdfs/<ticker>.pdf`，附带 `data/raw_pdfs/manifest.json` 记录元数据
+- 语言：仅下载英文版（或双语版中的英文部分）
+
+### 技术参考
+1. **hkex-filing-scraper** (https://github.com/simonplmak-cloud/hkex-filing-scraper)
+   - 使用港交所未公开的JSON API，比浏览器抓取快得多
+   - 支持全量历史（1999至今）
+   - 有并行下载、批处理、重试机制
+   - 我们可以参考它的API发现和调用方式，但不需要SurrealDB，我们用SQLite
+   
+2. **SkillHub文章** 提到采集方法分两步：自动化爬虫从HKEXnews下载所有招股书PDF
+
+### 需要brainstorm的点
+1. HKEx JSON API的endpoint发现——如何筛选出仅IPO招股书类型的filing
+2. 文件命名和去重策略（同一IPO可能有多个版本：申请版本、聆讯后、正式版）
+3. 断点续传和增量更新机制
+4. 速率限制和礼貌性爬取策略
+5. 元数据提取（ticker、公司名、上市日期、文档类型）与现有管道的 `data/sections/<ticker>.json` 对接
+6. 英文版本识别（部分招股书只有中文版）
+7. 其他需要brainstorm的点/架构等
+
+### 约束
+- Python CLI，融入现有 `src/hk_ipo/` 包结构
+- 与现有管道的命名约定一致（ticker用5位零填充，如 `01234`）
+- 幂等性：重复运行不重复下载已有文件
+- 输出 `working/spec.md`

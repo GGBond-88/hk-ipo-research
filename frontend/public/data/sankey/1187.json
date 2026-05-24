@@ -1,0 +1,90 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Geographic Expansion"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Overseas markets"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Channel expansion"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/General Corporate Purposes"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 604.2
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Geographic Expansion",
+      "value": 302.1
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Overseas markets",
+      "value": 302.1
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 100.7
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 100.7
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 201.4
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Channel expansion",
+      "value": 201.4
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 100.7
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 100.7
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/General Corporate Purposes",
+      "value": 100.7
+    }
+  ],
+  "total_net_proceeds": 704.9
+}

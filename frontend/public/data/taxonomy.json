@@ -1,0 +1,65 @@
+{
+  "categories": {
+    "Growth": {
+      "R&D and Technology": [
+        "Core product R&D",
+        "Platform / infrastructure R&D",
+        "Clinical / regulatory development"
+      ],
+      "Product Development": [
+        "New product launches",
+        "Product enhancements"
+      ],
+      "Sales and Marketing": [
+        "Brand and advertising",
+        "Channel expansion",
+        "Customer acquisition"
+      ],
+      "Capacity Expansion": [
+        "New manufacturing facilities",
+        "Capacity upgrades to existing sites",
+        "Equipment and machinery"
+      ],
+      "Geographic Expansion": [
+        "Overseas markets",
+        "Mainland China expansion",
+        "Specific region build-out"
+      ],
+      "Acquisitions and Strategic Investments": [
+        "M&A",
+        "Minority strategic investments",
+        "Joint ventures"
+      ],
+      "Infrastructure and Network": [
+        "Stores / branches",
+        "Data centers and IT infrastructure",
+        "Logistics and supply chain"
+      ]
+    },
+    "Financing": {
+      "Debt Repayment": [
+        "Bank loan repayment",
+        "Bond / note redemption"
+      ],
+      "Refinancing": [],
+      "Interest Payments": []
+    },
+    "Working Capital": {
+      "General Working Capital": [],
+      "Inventory Procurement": [],
+      "Receivables / Payables Management": [],
+      "Day-to-day Operations": []
+    },
+    "Others": {
+      "General Corporate Purposes": [],
+      "Reserves / Contingencies": [],
+      "Unallocated / Unspecified": []
+    }
+  },
+  "parent_order": [
+    "Growth",
+    "Financing",
+    "Working Capital",
+    "Others"
+  ]
+}
