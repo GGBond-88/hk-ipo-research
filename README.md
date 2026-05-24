@@ -1,136 +1,215 @@
-# hk-ipo-research
+# HK IPO Use-of-Proceeds Research
 
-港股 IPO 招股书「Use of Proceeds（募集资金用途）」章节的自动化提取与分析工具。
+[![CI](https://github.com/GGBond-88/hk-ipo-research/actions/workflows/ci.yml/badge.svg)](https://github.com/GGBond-88/hk-ipo-research/actions/workflows/ci.yml)
 
-## 项目简介
+Extract, classify, and analyze "Use of Proceeds" sections from HKEX Global Offering prospectuses.
 
-本项目以四层流水线处理港交所上市公司招股书 PDF，最终输出结构化的募资用途数据及跨公司对比分析报告，适用于投行研究、学术研究及投资尽调场景。
-
-L2 提取层直接调用 OpenAI-compatible API（通过 OpenRouter），内置自校正循环：首次提取失败 L3 校验时，自动将错误反馈给模型进行二次提取；仍失败则标记 `needs_human_review: true`。
-
-## 四层架构
-
-| 层级 | 模块 | 职责 |
-|------|------|------|
-| **L1** | `l1_sectioning.py` | PDF 解析与章节定位：将原始 PDF 转为 Markdown，定位并切割 "Use of Proceeds" 章节 |
-| **L2** | `l2_extraction.py` | LLM 结构化提取：直接调用 OpenAI SDK，从章节文本提取「项目 / 金额 / 百分比 / 分类 / 原文」，输出 JSON；内置自校正循环 |
-| **L3** | `l3_validation.py` | 数值校验：校验金额加总与百分比一致性（±1%），验证分类词汇表与 schema 版本 |
-| **L4** | `l4_analysis.py` | 统计分析与可视化：汇总多份招股书，生成行业对比图表与 CSV 摘要报告 |
-
-## 目录结构
+## Architecture (v2.0)
 
 ```
-hk-ipo-research/
-├── data/
-│   ├── raw_pdfs/      # 原始招股书 PDF（不入 git）
-│   ├── sections/      # L1 输出的章节文本（不入 git）
-│   ├── extracted/     # L2 输出的结构化 JSON（不入 git）
-│   └── reports/       # L4 生成的分析报告（CSV / PNG / Markdown）
-├── src/hk_ipo/
-│   ├── schema.py          # 单一事实源：字段定义、分类词汇表、SCHEMA_VERSION
-│   ├── l1_sectioning.py
-│   ├── l2_extraction.py
-│   ├── l3_validation.py
-│   └── l4_analysis.py
-├── tests/             # 130 个单元测试（pytest）
-└── scripts/
-    ├── run_pipeline.py    # 批量运行 L1→L2→L3→L4
-    └── run_mvp.py         # 单文件快速验证
+data/raw_pdfs/                                 [manual drop-in]
+        |
+        v
++-------------------------------------------------------------+
+| L1  l1_sectioning.py    PDF -> Markdown -> Use-of-Proceeds  |
+|                         section text + tables.              |
+|                         Detects language; skips zh PDFs.    |
++-------------------------------------------------------------+
+        |  data/sections/<ticker>.json
+        v
++-------------------------------------------------------------+
+| L2  l2_extraction.py    LLM Pass 1: flat extraction         |
+|                         category_raw, percentage, amount    |
++-------------------------------------------------------------+
+        |  data/extracted/<ticker>.json
+        v
++-------------------------------------------------------------+
+| L3  l3_validation.py    Numeric checks (sum +/-1%),         |
+|                         field presence, schema_version.     |
++-------------------------------------------------------------+
+        |
+        v
++-------------------------------------------------------------+
+| L4  l4_categorize.py    LLM Pass 2: classify into           |
+|                         Parent / Main / Sub taxonomy and    |
+|                         enforce 100%-sum constraints.       |
++-------------------------------------------------------------+
+        |  data/categorized/<ticker>.json
+        v
++-------------------------------------------------------------+
+| L5  enrichments/        Modular tools (one CLI per dim):    |
+|       geo.py, country.py, industry.py, specificity.py,      |
+|       timeline.py, capex_opex.py, esg_tag.py, commitment.py |
++-------------------------------------------------------------+
+        |  data/enriched/<ticker>.json
+        v
++-------------------------------------------------------------+
+| L6  storage/loader.py   Idempotent upsert into SQLite       |
++-------------------------------------------------------------+
+        |  data/ipo.db
+        v
++-------------------------------------------------------------+
+| L7  analysis/export.py  Pre-bake JSON for dashboard         |
++-------------------------------------------------------------+
+        |  frontend/public/data/*.json
+        v
++-------------------------------------------------------------+
+| frontend/   React + Vite + ECharts dashboard                |
+|             Sankey, stacked bars, time series, heatmap,     |
+|             scatter, filterable table views.                |
++-------------------------------------------------------------+
 ```
 
-## 安装
+> Canonical spec: [working/spec.md](working/spec.md) (671 lines)
+
+## Quickstart
+
+### 1. Setup
 
 ```bash
-git clone https://github.com/GGBond-88/hk-ipo-research.git
-cd hk-ipo-research
-
-# 安装（含开发依赖）
+# Python dependencies
 pip install -e ".[dev]"
 
-# 配置 API Key
-cp .env.example .env
-# 编辑 .env，填入你的 OPENROUTER_API_KEY
-# 可选：L2_TEXT_MODEL=deepseek/deepseek-v4-pro（默认值）
+# Frontend dependencies
+cd frontend && npm install && cd ..
 ```
 
-## 使用
+### 2. Place PDFs
 
-### 批量处理（推荐）
+Drop prospectus PDFs named after their HK ticker (e.g., `01234.pdf`) into:
+
+```
+data/raw_pdfs/
+```
+
+### 3. Run the pipeline
 
 ```bash
-# 处理 data/raw_pdfs/ 下的所有 PDF，并行 6 线程
-python scripts/run_pipeline.py
+# Full pipeline (all stages)
+python scripts/run_pipeline.py --all --workers 4
 
-# 强制重新处理（忽略已有输出）
-python scripts/run_pipeline.py --force
+# Dry-run cost estimation (no API calls)
+python scripts/run_pipeline.py --dry-run-cost
 
-# 自定义 PDF 目录和并发数
-python scripts/run_pipeline.py --pdf-dir /path/to/pdfs --workers 4
+# Run specific stages only
+python scripts/run_pipeline.py --only L1,L2,L4 --limit 3
 
-# 跳过 L4 分析（仅提取和验证）
-python scripts/run_pipeline.py --skip-l4
+# With frontend build
+python scripts/run_pipeline.py --all --build-frontend
 ```
 
-### 单文件快速验证
+### 4. View the dashboard
 
 ```bash
-python scripts/run_mvp.py data/raw_pdfs/your_prospectus.pdf
+cd frontend
+npm run dev      # http://localhost:5173
 ```
 
-### 分层单独运行
+Or open `frontend/dist/index.html` after `npm run build`.
+
+## Per-Stage CLI
+
+Each stage is independently runnable:
 
 ```bash
-# L1：PDF 解析
-python -m hk_ipo.l1_sectioning --all
+python -m hk_ipo.l1_sectioning --all [--limit N] [--force]
+python -m hk_ipo.l2_extraction --all [--force] [--workers 6]
+python -m hk_ipo.l3_validation --all [--strict]
+python -m hk_ipo.l4_categorize --all [--limit N] [--model deepseek/deepseek-v4-flash]
 
-# L2：LLM 提取（--force 覆盖已有输出）
-python -m hk_ipo.l2_extraction --all --force
+# Enrichments
+python -m hk_ipo.enrichments.geo          --all [--force]
+python -m hk_ipo.enrichments.country      --all [--force]
+python -m hk_ipo.enrichments.industry     --all [--force] [--source prospectus|manual]
+python -m hk_ipo.enrichments.specificity  --all [--force]
+python -m hk_ipo.enrichments.timeline     --all [--force]
+python -m hk_ipo.enrichments.capex_opex   --all [--force]
+python -m hk_ipo.enrichments.esg_tag      --all [--force]
+python -m hk_ipo.enrichments.commitment   --all [--force]
 
-# L3：校验
-python -m hk_ipo.l3_validation --all
-
-# L4：分析报告
-python -m hk_ipo.l4_analysis
+python -m hk_ipo.storage.loader --all [--db data/ipo.db] [--dry-run]
+python -m hk_ipo.analysis.export --db data/ipo.db --out frontend/public/data/
 ```
 
-### 运行测试
+## Taxonomy
+
+Four Parent categories (fixed):
+- **Growth** (R&D and Technology, Product Development, Sales and Marketing, Capacity Expansion, Geographic Expansion, Acquisitions and Strategic Investments, Infrastructure and Network)
+- **Financing** (Debt Repayment, Refinancing, Interest Payments)
+- **Working Capital** (General Working Capital, Inventory Procurement, Receivables / Payables Management, Day-to-day Operations)
+- **Others** (General Corporate Purposes, Reserves / Contingencies, Unallocated / Unspecified)
+
+See `src/hk_ipo/taxonomy.py` for the full closed vocabulary.
+
+## Enrichment Dimensions
+
+| Dimension | Scope | Values |
+|-----------|-------|--------|
+| geo | per use | domestic_hk, mainland, overseas |
+| country | per use, list | ISO 2-letter codes |
+| industry | per company | GICS industry name |
+| specificity | per use | specific, general, vague |
+| timeline | per use | 0-12m, 12-24m, 24-36m, 36m+, unspecified |
+| capex_opex | per use | capex, opex, financial |
+| esg_tag | per use, optional | green, social, governance |
+| commitment | per use | committed, discretionary |
+
+## Dashboard Views
+
+- **Overview** — KPI tiles + stacked bar by industry
+- **Company** — Sankey diagram per company with ticker picker
+- **Temporal** — Time series of parent allocation by listing year
+- **Industry** — Heatmap of industry x parent allocation
+- **Geographic** — Allocation by geographic region
+- **Cross-Dim** — Configurable scatter plot across any two numeric dimensions
+
+## Testing
 
 ```bash
-pytest tests/          # 130 个测试
-ruff check src/ tests/ # lint
+# Unit tests
+pytest tests/ --ignore=tests/e2e
+
+# End-to-end tests (requires API key and golden PDFs)
+pytest tests/e2e -m e2e
+
+# Lint
+ruff check src/ tests/
 ```
 
-## L2 输出格式
+## Environment
 
-```json
-{
-  "company_file": "example.pdf",
-  "hk_ticker": "9999",
-  "document_date": "2025-01-01",
-  "schema_version": "1.0",
-  "total_net_proceeds_hkd_million": 5000.0,
-  "currency": "HKD",
-  "uses": [
-    {
-      "use_id": "use_001",
-      "category": "Manufacturing expansion",
-      "percentage": 60.0,
-      "amount_hkd_million": 3000.0,
-      "description": "Build new factory in Europe.",
-      "source_text": "Approximately 60% or HK$3,000 million will be used..."
-    }
-  ],
-  "validation_preview": {
-    "percentage_sum": 100.0,
-    "top_level_count": 2,
-    "total_items_count": 2
-  }
-}
+Set `OPENROUTER_API_KEY` in `.env`:
+
+```
+OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-## 依赖说明
+Optional overrides:
+```
+L2_TEXT_MODEL=openai/gpt-4o
+```
 
-- **pymupdf4llm / pdfplumber**：PDF 解析（L1）
-- **openai**：直接调用 LLM（L2），通过 OpenRouter 路由至 deepseek/deepseek-v4-pro
-- **pydantic**：输出 schema 校验
-- **pandas / matplotlib**：数据分析与可视化（L4）
+## Data Layout
+
+```
+data/
+  raw_pdfs/           # input PDFs (manual drop-in)
+  sections/           # L1 output
+  extracted/          # L2 output
+  categorized/        # L4 output
+  enriched/           # L5 output (mutated by each enrichment)
+  ipo.db              # L6 SQLite
+  taxonomy_proposals.csv  # L4 novel sub-labels
+  industry_overrides.csv  # Optional: ticker -> industry manual overrides
+  logs/               # Pipeline run logs
+
+frontend/public/data/ # L7 output — consumed by the dashboard
+  manifest.json
+  companies.json
+  taxonomy.json
+  time_series.json
+  by_industry.json
+  by_geo.json
+  cross_dim.json
+  sankey/<ticker>.json
+```

@@ -13,11 +13,15 @@ RAW_PDFS_DIR: Path = DATA_DIR / "raw_pdfs"
 SECTIONS_DIR: Path = DATA_DIR / "sections"
 EXTRACTED_DIR: Path = DATA_DIR / "extracted"
 REPORTS_DIR: Path = DATA_DIR / "reports"
+CATEGORIZED_DIR: Path = DATA_DIR / "categorized"
+ENRICHED_DIR: Path = DATA_DIR / "enriched"
+
+L1_CACHE_DIR: Path = DATA_DIR / "l1_cache"
 
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
 # L2 model config — override via env vars if needed
-L2_TEXT_MODEL: str = os.getenv("L2_TEXT_MODEL", "deepseek/deepseek-v4-pro")
+L2_TEXT_MODEL: str = os.getenv("L2_TEXT_MODEL", "deepseek/deepseek-v4-flash")
 # future vision fallback — unused in MVP
 L2_VISION_MODEL: str = os.getenv("L2_VISION_MODEL", "google/gemini-2.5-flash-preview-05-20")
