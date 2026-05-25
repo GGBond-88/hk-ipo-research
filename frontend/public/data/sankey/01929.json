@@ -1,0 +1,130 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/Inventory Procurement"
+    },
+    {
+      "name": "Working Capital/Inventory Procurement/Raw materials / inventory procurement"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Related party loan repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Infrastructure and Network"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Stores / branches"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/General working capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 9168.4
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/Inventory Procurement",
+      "value": 9168.4
+    },
+    {
+      "source": "Working Capital/Inventory Procurement",
+      "target": "Working Capital/Inventory Procurement/Raw materials / inventory procurement",
+      "value": 9168.4
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 6692.9
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 6692.9
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Related party loan repayment",
+      "value": 3392.3
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 3300.6
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 1833.6
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Infrastructure and Network",
+      "value": 916.8
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Stores / branches",
+      "value": 916.8
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 916.8
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 916.8
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 641.8
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 641.8
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/General working capital",
+      "value": 641.8
+    }
+  ],
+  "total_net_proceeds": 18336.8
+}

@@ -1,0 +1,122 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Growth/Infrastructure and Network"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Logistics and supply chain"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Core product R&D"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Data centers and IT infrastructure"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bond / note redemption"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 11179.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 6288.4
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 6288.4
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Infrastructure and Network",
+      "value": 3493.5
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Logistics and supply chain",
+      "value": 2096.1
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 1397.4
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Core product R&D",
+      "value": 1397.4
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Data centers and IT infrastructure",
+      "value": 1397.4
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 1397.4
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 1397.4
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bond / note redemption",
+      "value": 1397.4
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 1397.4
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 1397.4
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 1397.4
+    }
+  ],
+  "total_net_proceeds": 13974.1
+}

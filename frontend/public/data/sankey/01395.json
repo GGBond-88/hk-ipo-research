@@ -1,0 +1,74 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Capacity upgrades to existing sites"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/Minority strategic investments"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 65.7
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 54.9
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 6.6
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Capacity upgrades to existing sites",
+      "value": 48.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 10.8
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/Minority strategic investments",
+      "value": 10.8
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 2.2
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 2.2
+    }
+  ],
+  "total_net_proceeds": 67.9
+}

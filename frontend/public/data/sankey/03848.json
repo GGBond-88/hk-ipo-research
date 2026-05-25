@@ -1,0 +1,74 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Growth/Product Development"
+    },
+    {
+      "name": "Growth/Product Development/New product launches"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 131.1
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 102.0
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 102.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Product Development",
+      "value": 29.1
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/New product launches",
+      "value": 29.1
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 14.6
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 14.6
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 14.6
+    }
+  ],
+  "total_net_proceeds": 145.7
+}

@@ -1,0 +1,74 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Geographic Expansion"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Mainland China expansion"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 305.5
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Geographic Expansion",
+      "value": 273.3
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Mainland China expansion",
+      "value": 273.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 32.2
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 32.2
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 16.1
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 16.1
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 16.1
+    }
+  ],
+  "total_net_proceeds": 321.6
+}

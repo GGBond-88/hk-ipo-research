@@ -1,0 +1,50 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 87.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 87.3
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 87.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 9.7
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 9.7
+    }
+  ],
+  "total_net_proceeds": 97.0
+}

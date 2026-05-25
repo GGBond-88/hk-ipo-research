@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Infrastructure and Network"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Stores / branches"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 15.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Infrastructure and Network",
+      "value": 5.0
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Stores / branches",
+      "value": 5.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 10.9
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 10.9
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 42.800000000000004
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 42.800000000000004
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 42.800000000000004
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 1.0
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 1.0
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 1.0
+    }
+  ],
+  "total_net_proceeds": 59.7
+}

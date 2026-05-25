@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Geographic Expansion"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Overseas markets"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Brand and advertising"
+    },
+    {
+      "name": "Growth/Product Development"
+    },
+    {
+      "name": "Growth/Product Development/Talent recruitment and retention"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Mainland China expansion"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 27.5
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Geographic Expansion",
+      "value": 16.900000000000002
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Overseas markets",
+      "value": 13.8
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 6.0
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Brand and advertising",
+      "value": 6.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Product Development",
+      "value": 4.6
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/Talent recruitment and retention",
+      "value": 4.6
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Mainland China expansion",
+      "value": 3.1
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 3.1
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 3.1
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 3.1
+    }
+  ],
+  "total_net_proceeds": 30.6
+}

@@ -1,0 +1,122 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/Special Dividend"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Customer acquisition"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Core product R&D"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Channel expansion"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 654.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 461.7
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 461.7
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 306.8
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 306.8
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/Special Dividend",
+      "value": 306.8
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 140.9
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Customer acquisition",
+      "value": 102.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 52.3
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Core product R&D",
+      "value": 52.3
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Channel expansion",
+      "value": 38.6
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 69.2
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 69.2
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 69.2
+    }
+  ],
+  "total_net_proceeds": 1030.9
+}

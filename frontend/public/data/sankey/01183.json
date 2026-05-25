@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Performance bond financing"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/New manufacturing facilities"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Capacity upgrades to existing sites"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Day-to-day Operations"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 123.3
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 123.3
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Performance bond financing",
+      "value": 100.0
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 109.4
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 109.4
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/New manufacturing facilities",
+      "value": 54.3
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Capacity upgrades to existing sites",
+      "value": 40.2
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 14.9
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Day-to-day Operations",
+      "value": 23.3
+    }
+  ],
+  "total_net_proceeds": 232.7
+}

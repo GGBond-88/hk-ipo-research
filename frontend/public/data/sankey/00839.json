@@ -1,0 +1,122 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Growth/Infrastructure and Network"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Stores / branches"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Core product R&D"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 2742.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 1831.3
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 1831.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Infrastructure and Network",
+      "value": 877.6999999999999
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Stores / branches",
+      "value": 877.6999999999999
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 246.3
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 246.3
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 246.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 73.9
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 73.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 33.9
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Core product R&D",
+      "value": 33.9
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 15.4
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 15.4
+    }
+  ],
+  "total_net_proceeds": 3078.5
+}

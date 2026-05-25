@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/New manufacturing facilities"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 1428.3
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 1428.3
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 1428.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 1420.3
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 1420.3
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/New manufacturing facilities",
+      "value": 1420.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 316.5
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 316.5
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 316.5
+    }
+  ],
+  "total_net_proceeds": 3165.1
+}

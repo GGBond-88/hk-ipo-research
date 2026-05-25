@@ -1,0 +1,122 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Infrastructure and Network"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Data centers and IT infrastructure"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Growth/Geographic Expansion"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Overseas markets"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/New manufacturing facilities"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Brand and advertising"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Day-to-day Operations"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 45.099999999999994
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Infrastructure and Network",
+      "value": 13.4
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Data centers and IT infrastructure",
+      "value": 13.4
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 11.9
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 11.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Geographic Expansion",
+      "value": 9.5
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Overseas markets",
+      "value": 9.5
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 6.0
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/New manufacturing facilities",
+      "value": 6.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 4.3
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Brand and advertising",
+      "value": 4.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 5.0
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 5.0
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Day-to-day Operations",
+      "value": 5.0
+    }
+  ],
+  "total_net_proceeds": 50.1
+}

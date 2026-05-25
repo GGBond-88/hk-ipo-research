@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Brand and advertising"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Platform / infrastructure R&D"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 1128.4
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 438.8
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Brand and advertising",
+      "value": 438.8
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 376.1
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Platform / infrastructure R&D",
+      "value": 376.1
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 313.5
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 313.5
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 125.4
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 125.4
+    }
+  ],
+  "total_net_proceeds": 1253.8
+}

@@ -1,0 +1,130 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Customer acquisition"
+    },
+    {
+      "name": "Growth/Geographic Expansion"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Specific region build-out"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Growth/Product Development"
+    },
+    {
+      "name": "Growth/Product Development/Product enhancements"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Day-to-day operations"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 20.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 12.0
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Customer acquisition",
+      "value": 12.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Geographic Expansion",
+      "value": 4.4
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Specific region build-out",
+      "value": 4.4
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 8.0
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 8.0
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 8.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 3.0
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 3.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Product Development",
+      "value": 1.5
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/Product enhancements",
+      "value": 1.5
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 2.6
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 2.6
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Day-to-day operations",
+      "value": 2.6
+    }
+  ],
+  "total_net_proceeds": 31.5
+}

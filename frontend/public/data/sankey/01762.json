@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Core product R&D"
+    },
+    {
+      "name": "Growth/Product Development"
+    },
+    {
+      "name": "Growth/Product Development/Platform / infrastructure R&D"
+    },
+    {
+      "name": "Growth/Product Development/New product launches"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Channel expansion"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 210.2
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 70.1
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Core product R&D",
+      "value": 70.1
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Product Development",
+      "value": 105.1
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/Platform / infrastructure R&D",
+      "value": 70.1
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/New product launches",
+      "value": 35.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 35.0
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Channel expansion",
+      "value": 35.0
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 23.4
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 23.4
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 23.4
+    }
+  ],
+  "total_net_proceeds": 233.6
+}

@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/New manufacturing facilities"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Growth/Product Development"
+    },
+    {
+      "name": "Growth/Product Development/Product enhancements"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Day-to-day operations"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 38.4
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 37.1
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/New manufacturing facilities",
+      "value": 37.1
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 78.9
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 78.9
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 78.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Product Development",
+      "value": 1.3
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/Product enhancements",
+      "value": 1.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 4.4
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 4.4
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Day-to-day operations",
+      "value": 4.4
+    }
+  ],
+  "total_net_proceeds": 121.7
+}

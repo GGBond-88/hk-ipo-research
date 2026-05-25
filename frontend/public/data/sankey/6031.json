@@ -1,0 +1,138 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/Unallocated / Unspecified"
+    },
+    {
+      "name": "Others/Unallocated / Unspecified/Unspecified use"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Infrastructure and Network"
+    },
+    {
+      "name": "Growth/Infrastructure and Network/Global service network expansion"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Core product R&D"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Overseas manufacturing build-out"
+    },
+    {
+      "name": "Growth/Capacity Expansion/New manufacturing facilities"
+    },
+    {
+      "name": "Growth/Product Development"
+    },
+    {
+      "name": "Growth/Product Development/New product launches"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General working capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 5366.0
+    },
+    {
+      "source": "Others",
+      "target": "Others/Unallocated / Unspecified",
+      "value": 5366.0
+    },
+    {
+      "source": "Others/Unallocated / Unspecified",
+      "target": "Others/Unallocated / Unspecified/Unspecified use",
+      "value": 5366.0
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 7151.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Infrastructure and Network",
+      "value": 9.0
+    },
+    {
+      "source": "Growth/Infrastructure and Network",
+      "target": "Growth/Infrastructure and Network/Global service network expansion",
+      "value": 9.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 2981.5
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Core product R&D",
+      "value": 2981.5
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 3912.1
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Overseas manufacturing build-out",
+      "value": 2385.2
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/New manufacturing facilities",
+      "value": 1526.9
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Product Development",
+      "value": 248.4
+    },
+    {
+      "source": "Growth/Product Development",
+      "target": "Growth/Product Development/New product launches",
+      "value": 248.4
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 173.4
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 173.4
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General working capital",
+      "value": 173.4
+    }
+  ],
+  "total_net_proceeds": 12690.4
+}

@@ -1,0 +1,50 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments"
+    },
+    {
+      "name": "Growth/Acquisitions and Strategic Investments/M&A"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 1279.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Acquisitions and Strategic Investments",
+      "value": 1279.0
+    },
+    {
+      "source": "Growth/Acquisitions and Strategic Investments",
+      "target": "Growth/Acquisitions and Strategic Investments/M&A",
+      "value": 1279.0
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 142.0
+    },
+    {
+      "source": "Others",
+      "target": "Others/",
+      "value": 142.0
+    }
+  ],
+  "total_net_proceeds": 1421.0
+}

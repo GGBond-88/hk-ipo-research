@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Equipment and machinery"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Brand and advertising"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Workforce expansion and training"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/Unallocated / Unspecified"
+    },
+    {
+      "name": "Others/Unallocated / Unspecified/Unallocated / Unspecified"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 15.2
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 8.0
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Equipment and machinery",
+      "value": 8.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 7.199999999999999
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Brand and advertising",
+      "value": 2.6
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Workforce expansion and training",
+      "value": 4.6
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 11.1
+    },
+    {
+      "source": "Others",
+      "target": "Others/Unallocated / Unspecified",
+      "value": 11.1
+    },
+    {
+      "source": "Others/Unallocated / Unspecified",
+      "target": "Others/Unallocated / Unspecified/Unallocated / Unspecified",
+      "value": 11.1
+    }
+  ],
+  "total_net_proceeds": 26.3
+}

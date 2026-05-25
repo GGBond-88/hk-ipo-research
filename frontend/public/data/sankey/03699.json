@@ -1,0 +1,26 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 111.60000000000001
+    },
+    {
+      "source": "Others",
+      "target": "Others/",
+      "value": 111.60000000000001
+    }
+  ],
+  "total_net_proceeds": 111.6
+}

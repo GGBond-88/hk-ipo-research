@@ -1,0 +1,90 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/Inventory Procurement"
+    },
+    {
+      "name": "Working Capital/Inventory Procurement/Revolving purchase payments for ICs"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/Testing and R&D equipment"
+    },
+    {
+      "name": "Growth/R&D and Technology/Recruiting R&D and engineering staff"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/General corporate purposes and working capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 67.5
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/Inventory Procurement",
+      "value": 67.5
+    },
+    {
+      "source": "Working Capital/Inventory Procurement",
+      "target": "Working Capital/Inventory Procurement/Revolving purchase payments for ICs",
+      "value": 67.5
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 10.7
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 10.7
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Testing and R&D equipment",
+      "value": 2.9
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/Recruiting R&D and engineering staff",
+      "value": 7.8
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 1.8
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 1.8
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/General corporate purposes and working capital",
+      "value": 1.8
+    }
+  ],
+  "total_net_proceeds": 80.0
+}

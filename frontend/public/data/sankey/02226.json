@@ -1,0 +1,106 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/Inventory Procurement"
+    },
+    {
+      "name": "Working Capital/Inventory Procurement/Raw material procurement"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/New manufacturing facilities"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/General Corporate Purposes"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 347.2
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/Inventory Procurement",
+      "value": 347.2
+    },
+    {
+      "source": "Working Capital/Inventory Procurement",
+      "target": "Working Capital/Inventory Procurement/Raw material procurement",
+      "value": 347.2
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 173.6
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 173.6
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/New manufacturing facilities",
+      "value": 173.6
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 69.5
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 69.5
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 69.5
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 69.5
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 69.5
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/General Corporate Purposes",
+      "value": 69.5
+    }
+  ],
+  "total_net_proceeds": 659.8
+}

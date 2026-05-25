@@ -1,0 +1,58 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Geographic Expansion"
+    },
+    {
+      "name": "Growth/Geographic Expansion/Specific region build-out"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/Day-to-day Operations"
+    },
+    {
+      "name": "Working Capital/Day-to-day Operations/Day-to-day Operations"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 263.7
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Geographic Expansion",
+      "value": 263.7
+    },
+    {
+      "source": "Growth/Geographic Expansion",
+      "target": "Growth/Geographic Expansion/Specific region build-out",
+      "value": 263.7
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 19.9
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/Day-to-day Operations",
+      "value": 19.9
+    },
+    {
+      "source": "Working Capital/Day-to-day Operations",
+      "target": "Working Capital/Day-to-day Operations/Day-to-day Operations",
+      "value": 19.9
+    }
+  ],
+  "total_net_proceeds": 283.6
+}

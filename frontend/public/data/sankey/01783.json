@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Guarantee / surety bond deposits"
+    },
+    {
+      "name": "Working Capital/Day-to-day Operations"
+    },
+    {
+      "name": "Working Capital/Day-to-day Operations/Project startup costs"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Sales and Marketing"
+    },
+    {
+      "name": "Growth/Sales and Marketing/Workforce expansion for tender capacity"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Debt Repayment"
+    },
+    {
+      "name": "Financing/Debt Repayment/Bank loan repayment"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 56.0
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 47.7
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Guarantee / surety bond deposits",
+      "value": 47.7
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/Day-to-day Operations",
+      "value": 8.3
+    },
+    {
+      "source": "Working Capital/Day-to-day Operations",
+      "target": "Working Capital/Day-to-day Operations/Project startup costs",
+      "value": 8.3
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 4.2
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Sales and Marketing",
+      "value": 4.2
+    },
+    {
+      "source": "Growth/Sales and Marketing",
+      "target": "Growth/Sales and Marketing/Workforce expansion for tender capacity",
+      "value": 4.2
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 9.0
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Debt Repayment",
+      "value": 9.0
+    },
+    {
+      "source": "Financing/Debt Repayment",
+      "target": "Financing/Debt Repayment/Bank loan repayment",
+      "value": 9.0
+    }
+  ],
+  "total_net_proceeds": 69.2
+}

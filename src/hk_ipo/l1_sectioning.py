@@ -160,10 +160,15 @@ def _matches_section_title(title: str) -> bool:
         return False
     # 必须整体匹配：标题内容与正则完全对应，不能只是包含一个子串
     # 用 fullmatch 而非 search，防止 "Use of Proceeds Summary" 误匹配
+    # Strip leading/trailing markdown emphasis (* and _) because
+    # pymupdf4llm renders bold paragraph headings as "## **Title**",
+    # and the `## ` markdown-heading regex captures "**Title**" with
+    # literal asterisks in group(2).
+    cleaned = title.strip().strip("*_").strip()
     return bool(
         re.fullmatch(
             _SECTION_TITLE_PATTERN,
-            title.strip(),
+            cleaned,
             re.IGNORECASE,
         )
     )
@@ -286,14 +291,28 @@ def _extract_tables(pdf_path: str, start_page: int, end_page: int) -> list[dict[
     """用 pdfplumber 提取指定页范围（1-based）内的所有表格。
 
     每张表格返回 {page, table_index, headers, rows}。
+
+    Strategy note: HK IPO use-of-proceeds tables are typically rendered
+    as positionally-aligned text rather than ruled tables. pdfplumber's
+    default ('lines'/'lines') therefore returns 0 tables. We try the
+    default first (for tables that DO have visible lines), then fall
+    back to text-alignment heuristic, which catches the line-less
+    tables common in HK prospectuses.
     """
     results: list[dict[str, Any]] = []
+    text_settings = {"vertical_strategy": "text", "horizontal_strategy": "text"}
     with pdfplumber.open(pdf_path) as pdf:
         for page_num in range(start_page - 1, end_page):  # pdfplumber 0-based
             if page_num >= len(pdf.pages):
                 break
             page = pdf.pages[page_num]
             tables = page.extract_tables()
+            # Fallback: if default strategy found nothing, try text-aligned
+            if not tables:
+                try:
+                    tables = page.extract_tables(table_settings=text_settings) or []
+                except Exception:
+                    tables = []  # pdfplumber occasionally raises on edge layouts
             for t_idx, table in enumerate(tables):
                 if not table:
                     continue

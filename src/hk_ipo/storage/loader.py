@@ -79,14 +79,18 @@ def upsert(conn: sqlite3.Connection, record: dict[str, Any]) -> None:
 
         # Insert uses
         for u in record.get("uses", []):
-            # Coerce NULL percentage to 0.0 (schema requires NOT NULL).
-            # Affects rare L2 outputs where the LLM omits a percentage
-            # for a use item (typically when only the amount is stated).
-            # Storing 0 is safe — the amount_hkd_million field carries the
-            # real value, and downstream analytics use NULLIF / coalesce.
+            # Coerce NULL on NOT NULL columns. Affects rare L2/L4 outputs:
+            #   - percentage: None when only an amount is stated.
+            #   - main_category: None when L4 LLM omits a category for a
+            #     use whose categorization confidence is below threshold.
+            # The .get(key, default) form returns the default only when
+            # the key is absent; if the key exists with value None we
+            # still get None, hence explicit `or` fallbacks below.
             pct = u.get("percentage")
             if pct is None:
                 pct = 0.0
+            parent_cat = u.get("parent_category") or ""
+            main_cat = u.get("main_category") or ""
             conn.execute(
                 """
                 INSERT INTO uses (
@@ -98,8 +102,8 @@ def upsert(conn: sqlite3.Connection, record: dict[str, Any]) -> None:
                 (
                     u.get("use_id", ""),
                     ticker,
-                    u.get("parent_category", ""),
-                    u.get("main_category", ""),
+                    parent_cat,
+                    main_cat,
                     u.get("sub_category"),
                     u.get("category_raw"),
                     pct,

@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Financing"
+    },
+    {
+      "name": "Financing/Refinancing"
+    },
+    {
+      "name": "Financing/Refinancing/Subsidiary capital strengthening"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/R&D and Technology"
+    },
+    {
+      "name": "Growth/R&D and Technology/IT systems and data analytics"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/General Corporate Purposes"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Financing",
+      "value": 952.0
+    },
+    {
+      "source": "Financing",
+      "target": "Financing/Refinancing",
+      "value": 952.0
+    },
+    {
+      "source": "Financing/Refinancing",
+      "target": "Financing/Refinancing/Subsidiary capital strengthening",
+      "value": 952.0
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 272.0
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/R&D and Technology",
+      "value": 272.0
+    },
+    {
+      "source": "Growth/R&D and Technology",
+      "target": "Growth/R&D and Technology/IT systems and data analytics",
+      "value": 272.0
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 136.0
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 136.0
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/General Corporate Purposes",
+      "value": 136.0
+    }
+  ],
+  "total_net_proceeds": 1360.0
+}

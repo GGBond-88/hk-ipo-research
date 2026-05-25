@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Others"
+    },
+    {
+      "name": "Others/General Corporate Purposes"
+    },
+    {
+      "name": "Others/General Corporate Purposes/Surety bonds issuance"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/Day-to-day Operations"
+    },
+    {
+      "name": "Working Capital/Day-to-day Operations/Project set-up costs"
+    },
+    {
+      "name": "Growth"
+    },
+    {
+      "name": "Growth/Capacity Expansion"
+    },
+    {
+      "name": "Growth/Capacity Expansion/Workforce expansion"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/General Working Capital"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Others",
+      "value": 8.6
+    },
+    {
+      "source": "Others",
+      "target": "Others/General Corporate Purposes",
+      "value": 8.6
+    },
+    {
+      "source": "Others/General Corporate Purposes",
+      "target": "Others/General Corporate Purposes/Surety bonds issuance",
+      "value": 8.6
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 23.7
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/Day-to-day Operations",
+      "value": 20.5
+    },
+    {
+      "source": "Working Capital/Day-to-day Operations",
+      "target": "Working Capital/Day-to-day Operations/Project set-up costs",
+      "value": 20.5
+    },
+    {
+      "source": "Total Net Proceeds",
+      "target": "Growth",
+      "value": 5.1
+    },
+    {
+      "source": "Growth",
+      "target": "Growth/Capacity Expansion",
+      "value": 5.1
+    },
+    {
+      "source": "Growth/Capacity Expansion",
+      "target": "Growth/Capacity Expansion/Workforce expansion",
+      "value": 5.1
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 3.2
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/General Working Capital",
+      "value": 3.2
+    }
+  ],
+  "total_net_proceeds": 37.4
+}

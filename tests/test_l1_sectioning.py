@@ -94,6 +94,14 @@ class TestMatchesSectionTitle:
         # Substring of valid match but not a full title
         assert _matches_section_title("Net Proceeds") is False
 
+    def test_strips_markdown_bold_asterisks(self):
+        # pymupdf4llm emits bold-paragraph headings as `## **Title**`,
+        # and the # heading regex captures `**Title**` literally in
+        # group(2). The matcher must strip the asterisks.
+        assert _matches_section_title("**Reasons for the Placing and use of proceeds**") is True
+        assert _matches_section_title("**USE OF PROCEEDS**") is True
+        assert _matches_section_title("**Use of Net Proceeds**") is True
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Part 1b: _locate_in_toc_list

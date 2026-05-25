@@ -1,0 +1,42 @@
+{
+  "nodes": [
+    {
+      "name": "Total Net Proceeds"
+    },
+    {
+      "name": "Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Margin and IPO Financing"
+    },
+    {
+      "name": "Working Capital/General Working Capital/Share Capital Increase for Futures Business"
+    }
+  ],
+  "links": [
+    {
+      "source": "Total Net Proceeds",
+      "target": "Working Capital",
+      "value": 218.0
+    },
+    {
+      "source": "Working Capital",
+      "target": "Working Capital/General Working Capital",
+      "value": 218.0
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Margin and IPO Financing",
+      "value": 196.0
+    },
+    {
+      "source": "Working Capital/General Working Capital",
+      "target": "Working Capital/General Working Capital/Share Capital Increase for Futures Business",
+      "value": 22.0
+    }
+  ],
+  "total_net_proceeds": 218.0
+}
