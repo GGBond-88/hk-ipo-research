@@ -14,6 +14,7 @@ from typing import Any
 
 
 from hk_ipo.enrichments.base import (
+    iter_records_for_enrichment,
     load_enriched_or_categorized,
     merge_enrichment_block,
     save_enriched,
@@ -90,22 +91,10 @@ def run(
         record = load_enriched_or_categorized(categorized_dir, ticker)
         return _enrich_one(record, enriched_dir, force=force)
     if all_files:
-        # PR-015 fix: callers pass categorized_dir as the BARE directory
-        # containing <ticker>.json files (not a parent with categorized/
-        # subdir). Prefer enriched_dir when it has files, else fall back
-        # to categorized_dir. This matches the pattern used by the other
-        # seven enrichment tools (country, specificity, etc.).
-        jsons = sorted(
-            (
-                enriched_dir
-                if enriched_dir.exists() and any(enriched_dir.glob("*.json"))
-                else categorized_dir
-            ).glob("*.json")
-        )
+        # Always iterate categorized_dir (source of truth for tickers);
+        # prefer enriched/<ticker>.json per-record to preserve prior dims.
         results = {}
-        for jf in jsons:
-            record = json.loads(jf.read_text(encoding="utf-8"))
-            tick = record.get("hk_ticker") or jf.stem
+        for tick, record in iter_records_for_enrichment(categorized_dir, enriched_dir):
             results[tick] = _enrich_one(record, enriched_dir, force=force)
         return results
     return None

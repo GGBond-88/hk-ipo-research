@@ -74,10 +74,21 @@ def detect_language(text: str) -> str:
 
 
 # ── 章节标题匹配正则 ─────────────────────────────────────────────────────────
-_SECTION_RE = re.compile(
-    r"(?:future\s+plans?\s+and\s+)?use\s+of\s+proceeds",
-    re.IGNORECASE,
+# Accepts these heading variants (case-insensitive):
+#   - USE OF PROCEEDS
+#   - USE OF NET PROCEEDS
+#   - FUTURE PLANS AND USE OF (NET) PROCEEDS
+#   - FUTURE PLANS AND USE OF (NET) PROCEEDS FROM THE GLOBAL OFFERING / PLACING / OFFERING
+#   - REASONS FOR THE PLACING AND USE OF PROCEEDS
+# Rejects:
+#   - USE OF PROCEEDS SUMMARY (sub-section, would match prefix but fullmatch rejects)
+#   - APPLICATION OF PROCEEDS (different wording)
+_SECTION_TITLE_PATTERN = (
+    r"(?:future\s+plans?\s+and\s+|reasons?\s+for\s+the\s+placing\s+and\s+)?"
+    r"use\s+of\s+(?:net\s+)?proceeds"
+    r"(?:\s+from\s+the\s+(?:global\s+offering|placing|offering))?"
 )
+_SECTION_RE = re.compile(_SECTION_TITLE_PATTERN, re.IGNORECASE)
 
 # Markdown 标题行（# / ## / ### …）或加粗标题行（** … **）
 _MD_HEADING_RE = re.compile(r"^(#{1,4})\s+(.+)", re.MULTILINE)
@@ -151,7 +162,7 @@ def _matches_section_title(title: str) -> bool:
     # 用 fullmatch 而非 search，防止 "Use of Proceeds Summary" 误匹配
     return bool(
         re.fullmatch(
-            r"(?:future\s+plans?\s+and\s+)?use\s+of\s+proceeds",
+            _SECTION_TITLE_PATTERN,
             title.strip(),
             re.IGNORECASE,
         )
@@ -378,6 +389,15 @@ def extract_use_of_proceeds(pdf_path: str, *, force: bool = False) -> dict[str, 
 
     doc = pymupdf.open(pdf_path)
     try:
+        # Guard against corrupted PDFs that open but have 0 pages
+        # (PyMuPDF reports "non-page object in page tree" but doesn't raise).
+        # pymupdf4llm.to_markdown indexes page_filter[-1] and crashes
+        # on an empty pages list — fail fast with a clear message instead.
+        if doc.page_count == 0:
+            raise ValueError(
+                f"PDF has 0 pages (corrupted or non-page object in page tree): {pdf_path}"
+            )
+
         # v2 — read a head sample to detect language; skip non-English with stub
         head_pages = list(range(min(5, doc.page_count)))
         head_md = pymupdf4llm.to_markdown(doc, pages=head_pages)

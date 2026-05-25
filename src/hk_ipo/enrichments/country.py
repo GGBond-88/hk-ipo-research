@@ -16,6 +16,7 @@ from typing import Any
 
 
 from hk_ipo.enrichments.base import (
+    iter_records_for_enrichment,
     load_enriched_or_categorized,
     merge_enrichment_block,
     save_enriched,
@@ -118,17 +119,8 @@ def run(
         )
         return _enrich_one(record, enriched_dir, force=force, ticker=ticker)
     if all_files:
-        jsons = sorted(
-            (
-                enriched_dir
-                if enriched_dir.exists() and any(enriched_dir.glob("*.json"))
-                else categorized_dir
-            ).glob("*.json"),
-        )
         results: dict[str, Any] = {}
-        for jf in jsons:
-            record = _json.loads(jf.read_text(encoding="utf-8"))
-            tick = record.get("hk_ticker") or jf.stem
+        for tick, record in iter_records_for_enrichment(categorized_dir, enriched_dir):
             results[tick] = _enrich_one(record, enriched_dir, force=force, ticker=tick)
         return results
     return None

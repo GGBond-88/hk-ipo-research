@@ -75,6 +75,31 @@ def save_enriched(
     out_path.write_text(_json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def iter_records_for_enrichment(
+    categorized_dir: _Path,
+    enriched_dir: _Path,
+):
+    """Iterate (ticker, record) pairs for batch enrichment.
+
+    Always iterates **categorized_dir** as the source of truth for which
+    tickers exist (all L4 outputs). For each ticker, yields the
+    ``enriched/<ticker>.json`` record if it already exists — so prior
+    enrichment blocks (from earlier L5 sub-stages) are preserved —
+    otherwise yields the categorized record.
+
+    Replaces the pre-fix pattern where each enrichment chose between
+    enriched_dir OR categorized_dir based on whether enriched_dir had
+    any files. That pattern caused new tickers to be silently skipped
+    whenever even one stale enriched file existed.
+    """
+    for cat_file in sorted(categorized_dir.glob("*.json")):
+        ticker = cat_file.stem
+        enriched_file = enriched_dir / f"{ticker}.json"
+        src = enriched_file if enriched_file.exists() else cat_file
+        record = _json.loads(src.read_text(encoding="utf-8"))
+        yield record.get("hk_ticker") or ticker, record
+
+
 def run_cli(
     *,
     dimension: str,

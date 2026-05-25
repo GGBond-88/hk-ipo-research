@@ -18,6 +18,9 @@ _PRICING: dict[str, dict[str, float]] = {
     "openai/gpt-4o":              {"in": 0.0025,  "out": 0.01},
     "openai/gpt-4o-mini":         {"in": 0.00015, "out": 0.0006},
     "deepseek/deepseek-v4-pro":   {"in": 0.00027, "out": 0.0011},
+    # Flash variant is the new default (config.L2_TEXT_MODEL). Rates mirror
+    # deepseek-chat tier as a conservative placeholder until confirmed.
+    "deepseek/deepseek-v4-flash": {"in": 0.00014, "out": 0.00028},
     "deepseek/deepseek-chat":     {"in": 0.00014, "out": 0.00028},
 }
 

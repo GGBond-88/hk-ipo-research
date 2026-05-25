@@ -19,6 +19,7 @@ import openai
 
 
 from hk_ipo.enrichments.base import (
+    iter_records_for_enrichment,
     load_enriched_or_categorized,
     merge_enrichment_block,
     save_enriched,
@@ -134,13 +135,8 @@ def run(
             record, enriched_dir, force=force, manual_overrides=manual, source=source, ticker=ticker
         )
     if all_files:
-        enriched_jsons = list(enriched_dir.glob("*.json")) if enriched_dir.exists() else []
-        data_dir = enriched_dir if enriched_jsons else categorized_dir
-        jsons = sorted(data_dir.glob("*.json"))
         results: dict[str, Any] = {}
-        for jf in jsons:
-            record = _json.loads(jf.read_text(encoding="utf-8"))
-            t = record.get("hk_ticker") or jf.stem
+        for t, record in iter_records_for_enrichment(categorized_dir, enriched_dir):
             results[t] = _enrich_one(
                 record, enriched_dir, force=force, manual_overrides=manual, source=source, ticker=t
             )

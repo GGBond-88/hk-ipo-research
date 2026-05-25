@@ -423,8 +423,11 @@ def build_categorized_output(
     rebalanced: list[dict[str, Any]],
     violations: list[dict[str, Any]],
     sub_proposals: list[dict[str, Any]],
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the complete L4 categorized output record."""
+    from datetime import datetime, timezone
+
     output = dict(l2_data)
     output["uses"] = uses_with_hierarchy
     output["schema_version"] = SCHEMA_VERSION
@@ -437,6 +440,16 @@ def build_categorized_output(
     }
     # Always ensure extraction_metadata exists in output (per spec).
     output["extraction_metadata"] = output.pop("extraction_metadata", {})
+    # Categorization metadata (spec §6 output schema). Tracks which model
+    # produced the L4 hierarchy and when, for reproducibility & audit.
+    from hk_ipo import config as _cfg
+    output["categorization_metadata"] = {
+        "model_used": model or _cfg.L2_TEXT_MODEL,
+        "categorization_timestamp": datetime.now(timezone.utc).isoformat(),
+        "schema_version": SCHEMA_VERSION,
+        "violations": len(violations),
+        "rebalanced": len(rebalanced),
+    }
     # Include sub-category proposals so callers (e.g. process_single) can
     # persist them without re-deriving the same filter logic.
     output["sub_proposals"] = sub_proposals
@@ -495,6 +508,7 @@ def categorize_one(l2_data: dict[str, Any], model: str | None = None) -> dict[st
             rebalanced=[],
             violations=[],
             sub_proposals=[],
+            model=model,
         )
 
     # Build prompt and call LLM
@@ -594,6 +608,7 @@ def categorize_one(l2_data: dict[str, Any], model: str | None = None) -> dict[st
         rebalanced=rebalanced,
         violations=violations,
         sub_proposals=sub_proposals,
+        model=model,
     )
 
 

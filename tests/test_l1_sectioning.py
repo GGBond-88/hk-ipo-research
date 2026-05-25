@@ -64,6 +64,36 @@ class TestMatchesSectionTitle:
         # Titles from TOC sometimes have leading/trailing spaces
         assert _matches_section_title("  USE OF PROCEEDS  ") is True
 
+    # ── 2026-05-25 audit: relaxed-regex variants ────────────────────────
+    # The original regex missed ~24% of real prospectuses because real
+    # filings vary the heading. These cases lock the relaxed pattern.
+
+    def test_use_of_net_proceeds(self):
+        assert _matches_section_title("USE OF NET PROCEEDS") is True
+
+    def test_future_plans_and_use_of_net_proceeds(self):
+        assert _matches_section_title("FUTURE PLANS AND USE OF NET PROCEEDS") is True
+
+    def test_future_plans_use_of_net_proceeds_with_offering_suffix(self):
+        # Common in main-board prospectuses (e.g. 00312.pdf)
+        assert _matches_section_title(
+            "FUTURE PLANS AND USE OF NET PROCEEDS FROM THE GLOBAL OFFERING"
+        ) is True
+
+    def test_use_of_net_proceeds_from_the_placing(self):
+        # Placing variant (placing memoranda)
+        assert _matches_section_title("USE OF NET PROCEEDS FROM THE PLACING") is True
+
+    def test_reasons_for_the_placing_and_use_of_proceeds(self):
+        # Placing memorandum variant (e.g. 00162.pdf, 00343.pdf)
+        assert _matches_section_title(
+            "Reasons for the Placing and use of proceeds"
+        ) is True
+
+    def test_rejects_net_proceeds_alone(self):
+        # Substring of valid match but not a full title
+        assert _matches_section_title("Net Proceeds") is False
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Part 1b: _locate_in_toc_list

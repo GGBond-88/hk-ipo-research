@@ -26,7 +26,10 @@ from hk_ipo import config  # noqa: E402
 # ── Price table (USD per 1k tokens, approximate) ──────────────────────────
 
 _PRICE_PER_1K: dict[str, tuple[float, float]] = {
-    "deepseek/deepseek-v4-pro": (0.0002, 0.0004),
+    "deepseek/deepseek-v4-pro": (0.00027, 0.0011),
+    # Aligned with llm_client.py _PRICING — flash uses deepseek-chat tier
+    # as a placeholder until confirmed.
+    "deepseek/deepseek-v4-flash": (0.00014, 0.00028),
     "openai/gpt-4o": (0.0025, 0.01),
     "openai/gpt-4o-mini": (0.00015, 0.0006),
     "anthropic/claude-sonnet-4-20250514": (0.003, 0.015),
@@ -98,10 +101,22 @@ def _record_stage_run(db_path: Path, run_id: str, stage: str,
 
 
 def _tickers_from_dir(d: Path) -> set[str]:
-    """Return the set of ticker stems from a directory of <ticker>.json files."""
+    """Return the set of ticker stems from a directory of <ticker>.json files.
+
+    Excludes:
+      - dotfiles (e.g. .gitkeep)
+      - L3 sidecars (<ticker>.validated.json) — these are validation
+        sidecars written next to L2's <ticker>.json. Including them
+        doubled the L3/L4 pipeline_runs counts and produced phantom
+        'failed' rows because the sidecar stem (<ticker>.validated) has
+        no matching output in downstream dirs.
+    """
     if not d.exists():
         return set()
-    return {p.stem for p in d.glob("*.json") if not p.name.startswith(".")}
+    return {
+        p.stem for p in d.glob("*.json")
+        if not p.name.startswith(".") and not p.stem.endswith(".validated")
+    }
 
 
 def _record_stage_sweep(db_path: Path, run_id: str, stage: str,
